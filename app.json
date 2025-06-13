@@ -39,7 +39,16 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "idealite",
+          "organization": "idealite"
+        }
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
