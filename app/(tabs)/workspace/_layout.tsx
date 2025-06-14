@@ -5,7 +5,16 @@ export default function WorkspaceLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false, // We'll handle headers in individual screens
+        headerShown: true, // Enable headers - they handle safe areas automatically
+        headerStyle: {
+          backgroundColor: "#ffffff",
+        },
+        headerTintColor: "#18181b",
+        headerTitleStyle: {
+          fontWeight: "600",
+          fontSize: 18,
+        },
+        headerShadowVisible: true,
       }}
     >
       <Stack.Screen
@@ -20,6 +29,7 @@ export default function WorkspaceLayout() {
           title: "Edit Note",
           // Hide tab bar when editing notes
           presentation: "card",
+          headerBackTitle: "Back",
         }}
       />
       <Stack.Screen
