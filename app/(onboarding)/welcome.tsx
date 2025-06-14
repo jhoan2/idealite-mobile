@@ -43,7 +43,7 @@ export default function WelcomeScreen() {
       });
 
       // Navigate to home after successful completion
-      router.replace("/(home)");
+      router.replace("/(tabs)/home");
     } catch (error) {
       Alert.alert("Error", "Failed to complete onboarding. Please try again.");
     }

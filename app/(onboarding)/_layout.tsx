@@ -13,7 +13,7 @@ export default function OnboardingLayout() {
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
   if (isLoading) return <LoadingScreen />;
   if (error) return <ErrorScreen message={error} onRetry={refetch} />;
-  if (user && isOnboarded) return <Redirect href="/(home)" />;
+  if (user && isOnboarded) return <Redirect href="/(tabs)/home" />;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
