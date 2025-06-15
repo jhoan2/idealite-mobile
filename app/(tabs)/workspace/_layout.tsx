@@ -42,7 +42,7 @@ export default function WorkspaceLayout() {
         <Stack.Screen
           name="index"
           options={{
-            title: "Workspace",
+            title: "",
             // Left side menu button
             headerLeft: () => (
               <TouchableOpacity
