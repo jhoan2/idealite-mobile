@@ -17,7 +17,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import "../global.css";
 
 Sentry.init({
-  dsn: "https://cbb037f2e5e13123d3c6f5fab6901ed5@o4507771612626944.ingest.us.sentry.io/4508011605721088",
+  dsn: __DEV__
+    ? undefined
+    : "https://cbb037f2e5e13123d3c6f5fab6901ed5@o4507771612626944.ingest.us.sentry.io/4508011605721088",
 
   // Configure Session Replay
   replaysSessionSampleRate: 0.1,
