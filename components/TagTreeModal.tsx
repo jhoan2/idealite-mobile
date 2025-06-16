@@ -1,9 +1,11 @@
 // components/TagTreeModal.tsx
 import { Ionicons } from "@expo/vector-icons";
+import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import * as Sentry from "@sentry/react-native";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -15,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useArchiveTag } from "../hooks/useArchiveTag";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
 
@@ -44,9 +47,150 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     forceSyncPendingUpdates,
   } = useTagTree();
 
+  // Archive mutation
+  const archiveTagMutation = useArchiveTag();
+
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // BottomSheet setup
+  const sheetRef = useRef<BottomSheet>(null);
+  const [selectedItem, setSelectedItem] = useState<{
+    id: string;
+    title: string;
+    type: "tag" | "folder" | "page";
+  } | null>(null);
+
+  const snapPoints = useMemo(() => ["25%", "50%", "75%"], []);
+
+  const actions = useMemo(() => {
+    const baseActions = [
+      { key: "edit", label: "Edit", icon: "create-outline" },
+      { key: "share", label: "Share", icon: "share-outline" },
+    ];
+
+    // Only show archive for tags (you can extend this logic for other types)
+    if (selectedItem?.type === "tag") {
+      baseActions.splice(1, 0, {
+        key: "archive",
+        label: "Archive",
+        icon: "archive-outline",
+      });
+    }
+
+    baseActions.push({
+      key: "delete",
+      label: "Delete",
+      icon: "trash-outline",
+    });
+
+    return baseActions;
+  }, [selectedItem?.type]);
+
+  const openSheet = (item: {
+    id: string;
+    title: string;
+    type: "tag" | "folder" | "page";
+  }) => {
+    setSelectedItem(item);
+    sheetRef.current?.snapToIndex(2);
+  };
+
+  const handleActionPress = async (actionKey: string) => {
+    if (!selectedItem) return;
+
+    try {
+      switch (actionKey) {
+        case "archive":
+          if (selectedItem.type === "tag") {
+            Alert.alert(
+              "Archive Tag",
+              `Are you sure you want to archive "${selectedItem.title}"?`,
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Archive",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await archiveTagMutation.mutateAsync({
+                        tagId: selectedItem.id,
+                        isArchived: true,
+                      });
+
+                      Alert.alert("Success", "Tag archived successfully");
+                      sheetRef.current?.close();
+                    } catch (error) {
+                      Alert.alert(
+                        "Error",
+                        "Failed to archive tag. Please try again."
+                      );
+                    }
+                  },
+                },
+              ]
+            );
+          }
+          break;
+
+        case "edit":
+          console.log(`Edit ${selectedItem.type} ${selectedItem.id}`);
+          sheetRef.current?.close();
+          // TODO: Navigate to edit screen
+          break;
+
+        case "share":
+          console.log(`Share ${selectedItem.type} ${selectedItem.id}`);
+          sheetRef.current?.close();
+          // TODO: Implement share functionality
+          break;
+
+        case "delete":
+          Alert.alert(
+            "Delete Item",
+            `Are you sure you want to delete "${selectedItem.title}"?`,
+            [
+              {
+                text: "Cancel",
+                style: "cancel",
+              },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => {
+                  console.log(`Delete ${selectedItem.type} ${selectedItem.id}`);
+                  sheetRef.current?.close();
+                  // TODO: Implement delete functionality
+                },
+              },
+            ]
+          );
+          break;
+
+        default:
+          console.log(`Unknown action: ${actionKey}`);
+          sheetRef.current?.close();
+      }
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          component: "TagTreeModal",
+          action: "handle_action_press",
+        },
+        extra: {
+          actionKey,
+          selectedItem,
+        },
+      });
+
+      Alert.alert("Error", "Something went wrong. Please try again.");
+      sheetRef.current?.close();
+    }
+  };
 
   // Handle modal animations
   useEffect(() => {
@@ -123,6 +267,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
             indentStyle,
           ]}
           onPress={() => toggleFolder(folder.id)}
+          onLongPress={() =>
+            openSheet({ id: folder.id, title: folder.name, type: "folder" })
+          }
           activeOpacity={0.7}
         >
           <Ionicons
@@ -164,6 +311,13 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   },
                 ]}
                 onPress={() => handlePagePress(page.id, page.title || "")}
+                onLongPress={() =>
+                  openSheet({
+                    id: page.id,
+                    title: page.title || "",
+                    type: "page",
+                  })
+                }
                 activeOpacity={0.7}
               >
                 <Ionicons
@@ -216,6 +370,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
             indentStyle,
           ]}
           onPress={() => toggleTag(tag.id)}
+          onLongPress={() =>
+            openSheet({ id: tag.id, title: tag.name, type: "tag" })
+          }
           activeOpacity={0.7}
         >
           <Ionicons
@@ -255,6 +412,13 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   paddingLeft: (level + 1) * INDENT_SIZE,
                 }}
                 onPress={() => handlePagePress(page.id, page.title || "")}
+                onLongPress={() =>
+                  openSheet({
+                    id: page.id,
+                    title: page.title || "",
+                    type: "page",
+                  })
+                }
                 activeOpacity={0.7}
               >
                 <Ionicons
@@ -500,6 +664,90 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
         {/* Content */}
         {renderContent()}
       </Animated.View>
+
+      {/* Action Bottom Sheet */}
+      <BottomSheet
+        ref={sheetRef}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        backgroundStyle={{
+          backgroundColor: "#FFFFFF",
+        }}
+        handleIndicatorStyle={{
+          backgroundColor: "#D1D5DB",
+          width: 40,
+        }}
+      >
+        <View style={{ padding: 16, paddingBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "600",
+              color: "#111827",
+              marginBottom: 4,
+            }}
+          >
+            {selectedItem?.title}
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: "#6B7280",
+              marginBottom: 16,
+              textTransform: "capitalize",
+            }}
+          >
+            {selectedItem?.type}
+          </Text>
+        </View>
+
+        <BottomSheetFlatList
+          data={actions}
+          keyExtractor={(item) => item.key}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                padding: 16,
+                borderBottomWidth: 1,
+                borderColor: "#E5E7EB",
+                opacity:
+                  archiveTagMutation.isPending && item.key === "archive"
+                    ? 0.5
+                    : 1,
+              }}
+              onPress={() => handleActionPress(item.key)}
+              disabled={archiveTagMutation.isPending && item.key === "archive"}
+            >
+              {archiveTagMutation.isPending && item.key === "archive" ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#4B5563"
+                  style={{ marginRight: 12 }}
+                />
+              ) : (
+                <Ionicons
+                  name={item.icon as any}
+                  size={20}
+                  color={item.key === "delete" ? "#EF4444" : "#374151"}
+                  style={{ marginRight: 12 }}
+                />
+              )}
+              <Text
+                style={{
+                  fontSize: 16,
+                  color: item.key === "delete" ? "#EF4444" : "#374151",
+                }}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={{ backgroundColor: "white" }}
+        />
+      </BottomSheet>
     </Modal>
   );
 }
