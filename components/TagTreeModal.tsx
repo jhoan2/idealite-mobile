@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArchiveTag } from "../hooks/useArchiveTag";
 import { useCreateFolder } from "../hooks/useCreateFolder";
 import { useCreatePage } from "../hooks/useCreatePage";
+import { useCreateTag } from "../hooks/useCreateTag";
 import { useDeleteFolder } from "../hooks/useDeleteFolder";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
@@ -68,6 +69,12 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   // Add the delete folder mutation
   const deleteFolderMutation = useDeleteFolder();
 
+  // Add tag creation state
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [tagName, setTagName] = useState("");
+
+  // Add the create tag mutation
+  const createTagMutation = useCreateTag();
 
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
@@ -120,9 +127,34 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   const actions = useMemo(() => {
     const baseActions = [];
 
-    // Show folder input or create folder action
-    if (selectedItem?.type === "tag" || selectedItem?.type === "folder") {
-      if (!showFolderInput) {
+    // Show create actions based on item type
+    if (selectedItem?.type === "tag") {
+      if (!showFolderInput && !showTagInput) {
+        baseActions.push(
+          {
+            key: "create-tag",
+            label: "Create Tag",
+            icon: "pricetags-outline",
+          },
+          {
+            key: "create-page",
+            label: "Create Page",
+            icon: "document-text-outline",
+          },
+          {
+            key: "create-canvas",
+            label: "Create Canvas",
+            icon: "color-palette-outline",
+          },
+          {
+            key: "create-folder",
+            label: "Create Folder",
+            icon: "folder-outline",
+          }
+        );
+      }
+    } else if (selectedItem?.type === "folder") {
+      if (!showFolderInput && !showTagInput) {
         baseActions.push(
           {
             key: "create-page",
@@ -141,15 +173,29 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           }
         );
       }
+    } else if (selectedItem?.type === "page") {
+      if (!showFolderInput && !showTagInput) {
+        // Pages only get edit button (no create actions, no share)
+        baseActions.push({
+          key: "edit",
+          label: "Edit",
+          icon: "create-outline",
+        });
+      }
     }
 
-    // Only show other actions if not in folder input mode
-    if (!showFolderInput) {
-      baseActions.push(
-        { key: "edit", label: "Edit", icon: "create-outline" },
-        { key: "share", label: "Share", icon: "share-outline" }
-      );
+    // Add remaining actions based on type
+    if (!showFolderInput && !showTagInput) {
+      // Add edit for tags only (folders and pages handled above)
+      if (selectedItem?.type === "tag") {
+        baseActions.push({
+          key: "edit",
+          label: "Edit",
+          icon: "create-outline",
+        });
+      }
 
+      // Archive is only for tags
       if (selectedItem?.type === "tag") {
         baseActions.push({
           key: "archive",
@@ -167,7 +213,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     }
 
     return baseActions;
-  }, [selectedItem?.type, showFolderInput]);
+  }, [selectedItem?.type, showFolderInput, showTagInput]);
 
   const openSheet = (item: {
     id: string;
@@ -330,11 +376,40 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     }
   };
 
+  // Add the create tag handler
+  const handleCreateTag = async () => {
+    if (!selectedItem || selectedItem.type !== "tag") return;
+
+    try {
+      if (!tagName.trim()) {
+        Alert.alert("Error", "Tag name cannot be empty");
+        return;
+      }
+
+      await createTagMutation.mutateAsync({
+        name: tagName.trim(),
+        parentId: selectedItem.id,
+      });
+
+      Alert.alert("Success", "Tag created successfully");
+      setShowTagInput(false);
+      setTagName("");
+      sheetRef.current?.close();
+    } catch (error) {
+      console.error("Error creating tag:", error);
+      Alert.alert("Error", "Failed to create tag. Please try again.");
+    }
+  };
+
   const handleActionPress = async (actionKey: string) => {
     if (!selectedItem) return;
 
     try {
       switch (actionKey) {
+        case "create-tag":
+          setShowTagInput(true);
+          break;
+
         case "create-page":
         case "create-canvas":
           await handleCreatePage(
@@ -421,25 +496,28 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
             );
           } else {
             // Generic delete for other types (pages, tags)
-          Alert.alert(
-            "Delete Item",
-            `Are you sure you want to delete "${selectedItem.title}"?`,
-            [
-              {
-                text: "Cancel",
-                style: "cancel",
-              },
-              {
-                text: "Delete",
-                style: "destructive",
-                onPress: () => {
-                  console.log(`Delete ${selectedItem.type} ${selectedItem.id}`);
-                  sheetRef.current?.close();
-                  // TODO: Implement delete functionality
+            Alert.alert(
+              "Delete Item",
+              `Are you sure you want to delete "${selectedItem.title}"?`,
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
                 },
-              },
-            ]
-          );
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: () => {
+                    console.log(
+                      `Delete ${selectedItem.type} ${selectedItem.id}`
+                    );
+                    sheetRef.current?.close();
+                    // TODO: Implement delete functionality for other types
+                  },
+                },
+              ]
+            );
+          }
           break;
 
         default:
@@ -510,12 +588,16 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     if (!visible) {
       setShowFolderInput(false);
       setFolderName("");
+      setShowTagInput(false);
+      setTagName("");
     }
   }, [visible]);
 
   useEffect(() => {
     setShowFolderInput(false);
     setFolderName("");
+    setShowTagInput(false);
+    setTagName("");
   }, [selectedItem]);
 
   const handlePagePress = (pageId: string, title: string) => {
@@ -984,6 +1066,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                 padding: 12,
                 fontSize: 16,
                 marginBottom: 16,
+                backgroundColor: "white",
               }}
               placeholder="Enter folder name (optional)"
               value={folderName}
@@ -1033,6 +1116,70 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
               </TouchableOpacity>
             </View>
           </View>
+        ) : showTagInput ? (
+          // Tag creation input
+          <View style={{ padding: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
+              Create New Tag
+            </Text>
+            <BottomSheetTextInput
+              style={{
+                borderWidth: 1,
+                borderColor: "#D1D5DB",
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 16,
+                marginBottom: 16,
+                backgroundColor: "white",
+              }}
+              placeholder="Enter tag name"
+              value={tagName}
+              onChangeText={setTagName}
+              autoFocus
+              onSubmitEditing={handleCreateTag}
+              returnKeyType="done"
+            />
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#D1D5DB",
+                  alignItems: "center",
+                }}
+                onPress={() => {
+                  setShowTagInput(false);
+                  setTagName("");
+                }}
+              >
+                <Text style={{ fontSize: 16, color: "#374151" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#4B5563",
+                  alignItems: "center",
+                  opacity: createTagMutation.isPending ? 0.5 : 1,
+                }}
+                onPress={handleCreateTag}
+                disabled={createTagMutation.isPending}
+              >
+                {createTagMutation.isPending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text
+                    style={{ fontSize: 16, color: "white", fontWeight: "600" }}
+                  >
+                    Create
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           // Regular actions list
           <BottomSheetFlatList
@@ -1052,7 +1199,12 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                       (item.key === "create-page" ||
                         item.key === "create-canvas")) ||
                     (createFolderMutation.isPending &&
-                      item.key === "create-folder")
+                      item.key === "create-folder") ||
+                    (createTagMutation.isPending &&
+                      item.key === "create-tag") ||
+                    (deleteFolderMutation.isPending &&
+                      item.key === "delete" &&
+                      selectedItem?.type === "folder")
                       ? 0.5
                       : 1,
                 }}
@@ -1075,6 +1227,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   (item.key === "create-page" ||
                     item.key === "create-canvas")) ||
                 (createFolderMutation.isPending &&
+                  item.key === "create-folder") ||
+                (createTagMutation.isPending && item.key === "create-tag") ||
                 (deleteFolderMutation.isPending &&
                   item.key === "delete" &&
                   selectedItem?.type === "folder") ? (
