@@ -27,6 +27,7 @@ import { useDeleteFolder } from "../hooks/useDeleteFolder";
 import { useDeletePage } from "../hooks/useDeletePage";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
+import { MoveDestinationModal } from "./MoveDestinationModal";
 
 interface TagTreeModalProps {
   visible: boolean;
@@ -128,6 +129,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     return findTagPath(tagTree, tagId) || [tagId];
   };
 
+  // Add state for move destination modal
+  const [showMoveModal, setShowMoveModal] = useState(false);
+
   const actions = useMemo(() => {
     const baseActions = [];
 
@@ -176,6 +180,15 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
             icon: "folder-outline",
           }
         );
+      }
+    } else if (selectedItem?.type === "page") {
+      // Add move action for pages
+      if (!showFolderInput && !showTagInput) {
+        baseActions.push({
+          key: "move-to",
+          label: "Move to",
+          icon: "move-outline",
+        });
       }
     }
 
@@ -405,6 +418,14 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
         case "create-folder":
           setShowFolderInput(true);
+          break;
+
+        case "move-to":
+          if (selectedItem.type === "page") {
+            // Close the action sheet and open move modal
+            sheetRef.current?.close();
+            setShowMoveModal(true);
+          }
           break;
 
         case "archive":
@@ -964,6 +985,64 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     );
   };
 
+  // Find the current tag/folder for the selected page
+  const getCurrentLocation = () => {
+    if (!selectedItem || selectedItem.type !== "page") {
+      return { currentTagId: null, currentFolderId: null };
+    }
+
+    // Find the page in the tag tree to get its current location
+    const findPageLocation = (
+      tags: TreeTag[]
+    ): { currentTagId: string | null; currentFolderId: string | null } => {
+      for (const tag of tags) {
+        // Check direct pages
+        if (tag.pages?.some((page) => page.id === selectedItem.id)) {
+          const page = tag.pages.find((p) => p.id === selectedItem.id);
+          return {
+            currentTagId: page?.primary_tag_id || tag.id,
+            currentFolderId: page?.folder_id || null,
+          };
+        }
+
+        // Check folders
+        if (tag.folders) {
+          const checkFolders = (folders: TreeFolder[]): any => {
+            for (const folder of folders) {
+              if (folder.pages?.some((page) => page.id === selectedItem.id)) {
+                const page = folder.pages.find((p) => p.id === selectedItem.id);
+                return {
+                  currentTagId: page?.primary_tag_id || tag.id,
+                  currentFolderId: folder.id,
+                };
+              }
+              if (folder.subFolders) {
+                const result = checkFolders(folder.subFolders);
+                if (result) return result;
+              }
+            }
+            return null;
+          };
+
+          const result = checkFolders(tag.folders);
+          if (result) return result;
+        }
+
+        // Check child tags
+        if (tag.children) {
+          const result = findPageLocation(tag.children);
+          if (result.currentTagId || result.currentFolderId) {
+            return result;
+          }
+        }
+      }
+
+      return { currentTagId: null, currentFolderId: null };
+    };
+
+    return findPageLocation(tagTree);
+  };
+
   return (
     <>
       {/* Drawer */}
@@ -1280,6 +1359,22 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           />
         )}
       </BottomSheet>
+
+      {/* Move Destination Modal - Only render when showMoveModal is true */}
+      {showMoveModal && selectedItem?.type === "page" && (
+        <MoveDestinationModal
+          visible={showMoveModal}
+          onClose={() => {
+            setShowMoveModal(false);
+            // Don't clear selectedItem here - let the action sheet handle it
+          }}
+          pageId={selectedItem.id}
+          pageTitle={selectedItem.title}
+          tagTree={tagTree}
+          currentTagId={getCurrentLocation().currentTagId}
+          currentFolderId={getCurrentLocation().currentFolderId}
+        />
+      )}
     </>
   );
 }
