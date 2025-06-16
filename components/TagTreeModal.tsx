@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetFlatList,
+  BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import * as Sentry from "@sentry/react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArchiveTag } from "../hooks/useArchiveTag";
+import { useCreateFolder } from "../hooks/useCreateFolder";
 import { useCreatePage } from "../hooks/useCreatePage";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
@@ -54,6 +56,13 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
   // Add the create page mutation
   const createPageMutation = useCreatePage();
+
+  // Add folder creation state
+  const [showFolderInput, setShowFolderInput] = useState(false);
+  const [folderName, setFolderName] = useState("");
+
+  // Add the create folder mutation
+  const createFolderMutation = useCreateFolder();
 
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
@@ -106,44 +115,53 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   const actions = useMemo(() => {
     const baseActions = [];
 
-    // Add create actions for tags and folders
+    // Show folder input or create folder action
     if (selectedItem?.type === "tag" || selectedItem?.type === "folder") {
-      baseActions.push(
-        {
-          key: "create-page",
-          label: "Create Page",
-          icon: "document-text-outline",
-        },
-        {
-          key: "create-canvas",
-          label: "Create Canvas",
-          icon: "color-palette-outline",
-        }
-      );
+      if (!showFolderInput) {
+        baseActions.push(
+          {
+            key: "create-page",
+            label: "Create Page",
+            icon: "document-text-outline",
+          },
+          {
+            key: "create-canvas",
+            label: "Create Canvas",
+            icon: "color-palette-outline",
+          },
+          {
+            key: "create-folder",
+            label: "Create Folder",
+            icon: "folder-outline",
+          }
+        );
+      }
     }
 
-    baseActions.push(
-      { key: "edit", label: "Edit", icon: "create-outline" },
-      { key: "share", label: "Share", icon: "share-outline" }
-    );
+    // Only show other actions if not in folder input mode
+    if (!showFolderInput) {
+      baseActions.push(
+        { key: "edit", label: "Edit", icon: "create-outline" },
+        { key: "share", label: "Share", icon: "share-outline" }
+      );
 
-    // Only show archive for tags
-    if (selectedItem?.type === "tag") {
+      if (selectedItem?.type === "tag") {
+        baseActions.push({
+          key: "archive",
+          label: "Archive",
+          icon: "archive-outline",
+        });
+      }
+
       baseActions.push({
-        key: "archive",
-        label: "Archive",
-        icon: "archive-outline",
+        key: "delete",
+        label: "Delete",
+        icon: "trash-outline",
       });
     }
 
-    baseActions.push({
-      key: "delete",
-      label: "Delete",
-      icon: "trash-outline",
-    });
-
     return baseActions;
-  }, [selectedItem?.type]);
+  }, [selectedItem?.type, showFolderInput]);
 
   const openSheet = (item: {
     id: string;
@@ -243,6 +261,69 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     }
   };
 
+  // Add folder creation handler
+  const handleCreateFolder = async () => {
+    if (!selectedItem) return;
+
+    try {
+      let tagId: string;
+      let parentFolderId: string | undefined;
+
+      if (selectedItem.type === "tag") {
+        tagId = selectedItem.id;
+        parentFolderId = undefined;
+      } else if (selectedItem.type === "folder") {
+        // Find the folder's parent tag
+        const findFolder = (tags: TreeTag[]): { tagId: string } | null => {
+          for (const tag of tags) {
+            if (tag.folders) {
+              const findInFolders = (folders: TreeFolder[]): boolean => {
+                for (const folder of folders) {
+                  if (folder.id === selectedItem.id) return true;
+                  if (folder.subFolders && findInFolders(folder.subFolders))
+                    return true;
+                }
+                return false;
+              };
+
+              if (findInFolders(tag.folders)) {
+                return { tagId: tag.id };
+              }
+            }
+
+            if (tag.children) {
+              const found = findFolder(tag.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const result = findFolder(tagTree);
+        if (!result) throw new Error("Parent tag not found");
+
+        tagId = result.tagId;
+        parentFolderId = selectedItem.id;
+      } else {
+        throw new Error("Cannot create folder in this context");
+      }
+
+      await createFolderMutation.mutateAsync({
+        name: folderName.trim() || undefined, // Send undefined for auto-generation
+        tagId,
+        parentFolderId,
+      });
+
+      Alert.alert("Success", "Folder created successfully");
+      setShowFolderInput(false);
+      setFolderName("");
+      sheetRef.current?.close();
+    } catch (error) {
+      console.error("Error creating folder:", error);
+      Alert.alert("Error", "Failed to create folder. Please try again.");
+    }
+  };
+
   const handleActionPress = async (actionKey: string) => {
     if (!selectedItem) return;
 
@@ -253,6 +334,10 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           await handleCreatePage(
             actionKey === "create-canvas" ? "canvas" : "page"
           );
+          break;
+
+        case "create-folder":
+          setShowFolderInput(true);
           break;
 
         case "archive":
@@ -386,6 +471,19 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     hasPendingUpdates,
     forceSyncPendingUpdates,
   ]);
+
+  // Reset folder input when modal closes or item changes
+  useEffect(() => {
+    if (!visible) {
+      setShowFolderInput(false);
+      setFolderName("");
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    setShowFolderInput(false);
+    setFolderName("");
+  }, [selectedItem]);
 
   const handlePagePress = (pageId: string, title: string) => {
     try {
@@ -839,61 +937,134 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           </Text>
         </View>
 
-        <BottomSheetFlatList
-          data={actions}
-          keyExtractor={(item) => item.key}
-          renderItem={({ item }) => (
-            <TouchableOpacity
+        {showFolderInput ? (
+          // Folder creation input
+          <View style={{ padding: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
+              Create New Folder
+            </Text>
+            <BottomSheetTextInput
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                padding: 16,
-                borderBottomWidth: 1,
-                borderColor: "#E5E7EB",
-                opacity:
+                borderWidth: 1,
+                borderColor: "#D1D5DB",
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 16,
+                marginBottom: 16,
+              }}
+              placeholder="Enter folder name (optional)"
+              value={folderName}
+              onChangeText={setFolderName}
+              autoFocus
+              onSubmitEditing={handleCreateFolder}
+              returnKeyType="done"
+            />
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#D1D5DB",
+                  alignItems: "center",
+                }}
+                onPress={() => {
+                  setShowFolderInput(false);
+                  setFolderName("");
+                }}
+              >
+                <Text style={{ fontSize: 16, color: "#374151" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#4B5563",
+                  alignItems: "center",
+                  opacity: createFolderMutation.isPending ? 0.5 : 1,
+                }}
+                onPress={handleCreateFolder}
+                disabled={createFolderMutation.isPending}
+              >
+                {createFolderMutation.isPending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text
+                    style={{ fontSize: 16, color: "white", fontWeight: "600" }}
+                  >
+                    Create
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          // Regular actions list
+          <BottomSheetFlatList
+            data={actions}
+            keyExtractor={(item) => item.key}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  borderBottomWidth: 1,
+                  borderColor: "#E5E7EB",
+                  opacity:
+                    (archiveTagMutation.isPending && item.key === "archive") ||
+                    (createPageMutation.isPending &&
+                      (item.key === "create-page" ||
+                        item.key === "create-canvas")) ||
+                    (createFolderMutation.isPending &&
+                      item.key === "create-folder")
+                      ? 0.5
+                      : 1,
+                }}
+                onPress={() => handleActionPress(item.key)}
+                disabled={
                   (archiveTagMutation.isPending && item.key === "archive") ||
                   (createPageMutation.isPending &&
                     (item.key === "create-page" ||
-                      item.key === "create-canvas"))
-                    ? 0.5
-                    : 1,
-              }}
-              onPress={() => handleActionPress(item.key)}
-              disabled={
-                (archiveTagMutation.isPending && item.key === "archive") ||
-                (createPageMutation.isPending &&
-                  (item.key === "create-page" || item.key === "create-canvas"))
-              }
-            >
-              {(archiveTagMutation.isPending && item.key === "archive") ||
-              (createPageMutation.isPending &&
-                (item.key === "create-page" ||
-                  item.key === "create-canvas")) ? (
-                <ActivityIndicator
-                  size="small"
-                  color="#4B5563"
-                  style={{ marginRight: 12 }}
-                />
-              ) : (
-                <Ionicons
-                  name={item.icon as any}
-                  size={20}
-                  color={item.key === "delete" ? "#EF4444" : "#374151"}
-                  style={{ marginRight: 12 }}
-                />
-              )}
-              <Text
-                style={{
-                  fontSize: 16,
-                  color: item.key === "delete" ? "#EF4444" : "#374151",
-                }}
+                      item.key === "create-canvas")) ||
+                  (createFolderMutation.isPending &&
+                    item.key === "create-folder")
+                }
               >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          )}
-          contentContainerStyle={{ backgroundColor: "white" }}
-        />
+                {(archiveTagMutation.isPending && item.key === "archive") ||
+                (createPageMutation.isPending &&
+                  (item.key === "create-page" ||
+                    item.key === "create-canvas")) ||
+                (createFolderMutation.isPending &&
+                  item.key === "create-folder") ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#4B5563"
+                    style={{ marginRight: 12 }}
+                  />
+                ) : (
+                  <Ionicons
+                    name={item.icon as any}
+                    size={20}
+                    color={item.key === "delete" ? "#EF4444" : "#374151"}
+                    style={{ marginRight: 12 }}
+                  />
+                )}
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: item.key === "delete" ? "#EF4444" : "#374151",
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={{ backgroundColor: "white" }}
+          />
+        )}
       </BottomSheet>
     </>
   );
