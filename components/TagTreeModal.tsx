@@ -24,6 +24,7 @@ import { useCreateFolder } from "../hooks/useCreateFolder";
 import { useCreatePage } from "../hooks/useCreatePage";
 import { useCreateTag } from "../hooks/useCreateTag";
 import { useDeleteFolder } from "../hooks/useDeleteFolder";
+import { useDeletePage } from "../hooks/useDeletePage";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
 
@@ -75,6 +76,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
   // Add the create tag mutation
   const createTagMutation = useCreateTag();
+
+  // Add the delete page mutation
+  const deletePageMutation = useDeletePage();
 
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
@@ -470,10 +474,42 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                 },
               ]
             );
-          } else {
-            // Generic delete for other types (pages, tags)
+          } else if (selectedItem.type === "page") {
             Alert.alert(
-              "Delete Item",
+              "Delete Page",
+              `Are you sure you want to delete "${selectedItem.title}"?`,
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await deletePageMutation.mutateAsync({
+                        id: selectedItem.id,
+                        title: selectedItem.title, // Include title for tab deletion
+                      });
+
+                      Alert.alert("Success", "Page deleted successfully");
+                      sheetRef.current?.close();
+                    } catch (error) {
+                      console.error("Error deleting page:", error);
+                      Alert.alert(
+                        "Error",
+                        "Failed to delete page. Please try again."
+                      );
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            // Generic delete for tags (still TODO)
+            Alert.alert(
+              "Delete Tag",
               `Are you sure you want to delete "${selectedItem.title}"?`,
               [
                 {
@@ -488,7 +524,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                       `Delete ${selectedItem.type} ${selectedItem.id}`
                     );
                     sheetRef.current?.close();
-                    // TODO: Implement delete functionality for other types
+                    // TODO: Implement delete tag functionality
                   },
                 },
               ]
@@ -1180,7 +1216,10 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                       item.key === "create-tag") ||
                     (deleteFolderMutation.isPending &&
                       item.key === "delete" &&
-                      selectedItem?.type === "folder")
+                      selectedItem?.type === "folder") ||
+                    (deletePageMutation.isPending &&
+                      item.key === "delete" &&
+                      selectedItem?.type === "page")
                       ? 0.5
                       : 1,
                 }}
@@ -1195,7 +1234,10 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   (createTagMutation.isPending && item.key === "create-tag") ||
                   (deleteFolderMutation.isPending &&
                     item.key === "delete" &&
-                    selectedItem?.type === "folder")
+                    selectedItem?.type === "folder") ||
+                  (deletePageMutation.isPending &&
+                    item.key === "delete" &&
+                    selectedItem?.type === "page")
                 }
               >
                 {(archiveTagMutation.isPending && item.key === "archive") ||
@@ -1207,7 +1249,10 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                 (createTagMutation.isPending && item.key === "create-tag") ||
                 (deleteFolderMutation.isPending &&
                   item.key === "delete" &&
-                  selectedItem?.type === "folder") ? (
+                  selectedItem?.type === "folder") ||
+                (deletePageMutation.isPending &&
+                  item.key === "delete" &&
+                  selectedItem?.type === "page") ? (
                   <ActivityIndicator
                     size="small"
                     color="#4B5563"
