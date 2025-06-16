@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArchiveTag } from "../hooks/useArchiveTag";
+import { useCreatePage } from "../hooks/useCreatePage";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
 
@@ -51,6 +52,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   // Archive mutation
   const archiveTagMutation = useArchiveTag();
 
+  // Add the create page mutation
+  const createPageMutation = useCreatePage();
+
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -65,15 +69,67 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
   const snapPoints = useMemo(() => ["25%", "50%", "75%"], []);
 
-  const actions = useMemo(() => {
-    const baseActions = [
-      { key: "edit", label: "Edit", icon: "create-outline" },
-      { key: "share", label: "Share", icon: "share-outline" },
-    ];
+  const generateUntitledName = (existingPages: TreePage[]) => {
+    const untitledPages = existingPages.filter((page) =>
+      page.title?.toLowerCase().startsWith("untitled")
+    );
 
-    // Only show archive for tags (you can extend this logic for other types)
+    return untitledPages.length === 0
+      ? "untitled"
+      : `untitled ${untitledPages.length}`;
+  };
+
+  const buildTagHierarchy = (tagId: string, tagTree: TreeTag[]): string[] => {
+    const findTagPath = (
+      tags: TreeTag[],
+      targetId: string,
+      currentPath: string[] = []
+    ): string[] | null => {
+      for (const tag of tags) {
+        const newPath = [...currentPath, tag.id];
+
+        if (tag.id === targetId) {
+          return newPath;
+        }
+
+        if (tag.children && tag.children.length > 0) {
+          const result = findTagPath(tag.children, targetId, newPath);
+          if (result) return result;
+        }
+      }
+      return null;
+    };
+
+    return findTagPath(tagTree, tagId) || [tagId];
+  };
+
+  const actions = useMemo(() => {
+    const baseActions = [];
+
+    // Add create actions for tags and folders
+    if (selectedItem?.type === "tag" || selectedItem?.type === "folder") {
+      baseActions.push(
+        {
+          key: "create-page",
+          label: "Create Page",
+          icon: "document-text-outline",
+        },
+        {
+          key: "create-canvas",
+          label: "Create Canvas",
+          icon: "color-palette-outline",
+        }
+      );
+    }
+
+    baseActions.push(
+      { key: "edit", label: "Edit", icon: "create-outline" },
+      { key: "share", label: "Share", icon: "share-outline" }
+    );
+
+    // Only show archive for tags
     if (selectedItem?.type === "tag") {
-      baseActions.splice(1, 0, {
+      baseActions.push({
         key: "archive",
         label: "Archive",
         icon: "archive-outline",
@@ -98,11 +154,107 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     sheetRef.current?.snapToIndex(2);
   };
 
+  // Add the create page handler
+  const handleCreatePage = async (type: "page" | "canvas") => {
+    if (!selectedItem) return;
+
+    try {
+      let tagId: string;
+      let folderId: string | null = null;
+      let existingPages: TreePage[] = [];
+
+      if (selectedItem.type === "tag") {
+        tagId = selectedItem.id;
+        // Find the tag in the tree to get its pages
+        const findTag = (tags: TreeTag[]): TreeTag | null => {
+          for (const tag of tags) {
+            if (tag.id === selectedItem.id) return tag;
+            if (tag.children) {
+              const found = findTag(tag.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const tag = findTag(tagTree);
+        existingPages = tag?.pages || [];
+      } else if (selectedItem.type === "folder") {
+        // Find the folder and its parent tag
+        const findFolder = (
+          tags: TreeTag[]
+        ): { folder: TreeFolder; tagId: string } | null => {
+          for (const tag of tags) {
+            if (tag.folders) {
+              const findInFolders = (
+                folders: TreeFolder[]
+              ): TreeFolder | null => {
+                for (const folder of folders) {
+                  if (folder.id === selectedItem.id) return folder;
+                  if (folder.subFolders) {
+                    const found = findInFolders(folder.subFolders);
+                    if (found) return found;
+                  }
+                }
+                return null;
+              };
+
+              const folder = findInFolders(tag.folders);
+              if (folder) return { folder, tagId: tag.id };
+            }
+
+            if (tag.children) {
+              const found = findFolder(tag.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const result = findFolder(tagTree);
+        if (!result) throw new Error("Folder not found");
+
+        tagId = result.tagId;
+        folderId = selectedItem.id;
+        existingPages = result.folder.pages || [];
+      } else {
+        throw new Error("Cannot create page in this context");
+      }
+
+      const title = generateUntitledName(existingPages);
+      const hierarchy = buildTagHierarchy(tagId, tagTree);
+
+      await createPageMutation.mutateAsync({
+        title,
+        tagId,
+        hierarchy,
+        folderId,
+        type,
+      });
+
+      Alert.alert(
+        "Success",
+        `${type === "canvas" ? "Canvas" : "Page"} created successfully`
+      );
+      sheetRef.current?.close();
+    } catch (error) {
+      console.error("Error creating page:", error);
+      Alert.alert("Error", `Failed to create ${type}. Please try again.`);
+    }
+  };
+
   const handleActionPress = async (actionKey: string) => {
     if (!selectedItem) return;
 
     try {
       switch (actionKey) {
+        case "create-page":
+        case "create-canvas":
+          await handleCreatePage(
+            actionKey === "create-canvas" ? "canvas" : "page"
+          );
+          break;
+
         case "archive":
           if (selectedItem.type === "tag") {
             Alert.alert(
@@ -699,14 +851,24 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                 borderBottomWidth: 1,
                 borderColor: "#E5E7EB",
                 opacity:
-                  archiveTagMutation.isPending && item.key === "archive"
+                  (archiveTagMutation.isPending && item.key === "archive") ||
+                  (createPageMutation.isPending &&
+                    (item.key === "create-page" ||
+                      item.key === "create-canvas"))
                     ? 0.5
                     : 1,
               }}
               onPress={() => handleActionPress(item.key)}
-              disabled={archiveTagMutation.isPending && item.key === "archive"}
+              disabled={
+                (archiveTagMutation.isPending && item.key === "archive") ||
+                (createPageMutation.isPending &&
+                  (item.key === "create-page" || item.key === "create-canvas"))
+              }
             >
-              {archiveTagMutation.isPending && item.key === "archive" ? (
+              {(archiveTagMutation.isPending && item.key === "archive") ||
+              (createPageMutation.isPending &&
+                (item.key === "create-page" ||
+                  item.key === "create-canvas")) ? (
                 <ActivityIndicator
                   size="small"
                   color="#4B5563"
