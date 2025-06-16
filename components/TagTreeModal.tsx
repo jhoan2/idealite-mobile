@@ -1,6 +1,9 @@
 // components/TagTreeModal.tsx
 import { Ionicons } from "@expo/vector-icons";
-import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
+import BottomSheet, {
+  BottomSheetBackdrop,
+  BottomSheetFlatList,
+} from "@gorhom/bottom-sheet";
 import * as Sentry from "@sentry/react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -8,12 +11,10 @@ import {
   Alert,
   Animated,
   Dimensions,
-  Modal,
   RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -587,30 +588,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      statusBarTranslucent
-      onRequestClose={onClose}
-      animationType="none"
-    >
-      {/* Backdrop */}
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          opacity: opacityAnim,
-        }}
-      >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={{ flex: 1 }} />
-        </TouchableWithoutFeedback>
-      </Animated.View>
-
+    <>
       {/* Drawer */}
       <Animated.View
         style={{
@@ -668,9 +646,17 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
       {/* Action Bottom Sheet */}
       <BottomSheet
         ref={sheetRef}
-        index={-1}
+        index={visible ? 0 : -1}
         snapPoints={snapPoints}
         enablePanDownToClose
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop
+            {...props}
+            appearsOnIndex={0}
+            disappearsOnIndex={-1}
+            pressBehavior="close"
+          />
+        )}
         backgroundStyle={{
           backgroundColor: "#FFFFFF",
         }}
@@ -748,6 +734,6 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           contentContainerStyle={{ backgroundColor: "white" }}
         />
       </BottomSheet>
-    </Modal>
+    </>
   );
 }
