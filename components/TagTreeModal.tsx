@@ -173,28 +173,10 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           }
         );
       }
-    } else if (selectedItem?.type === "page") {
-      if (!showFolderInput && !showTagInput) {
-        // Pages only get edit button (no create actions, no share)
-        baseActions.push({
-          key: "edit",
-          label: "Edit",
-          icon: "create-outline",
-        });
-      }
     }
 
     // Add remaining actions based on type
     if (!showFolderInput && !showTagInput) {
-      // Add edit for tags only (folders and pages handled above)
-      if (selectedItem?.type === "tag") {
-        baseActions.push({
-          key: "edit",
-          label: "Edit",
-          icon: "create-outline",
-        });
-      }
-
       // Archive is only for tags
       if (selectedItem?.type === "tag") {
         baseActions.push({
@@ -454,12 +436,6 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
               ]
             );
           }
-          break;
-
-        case "edit":
-          console.log(`Edit ${selectedItem.type} ${selectedItem.id}`);
-          sheetRef.current?.close();
-          // TODO: Navigate to edit screen
           break;
 
         case "delete":
