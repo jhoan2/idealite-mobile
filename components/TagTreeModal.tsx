@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArchiveTag } from "../hooks/useArchiveTag";
 import { useCreateFolder } from "../hooks/useCreateFolder";
 import { useCreatePage } from "../hooks/useCreatePage";
+import { useDeleteFolder } from "../hooks/useDeleteFolder";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
 
@@ -63,6 +64,10 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
   // Add the create folder mutation
   const createFolderMutation = useCreateFolder();
+
+  // Add the delete folder mutation
+  const deleteFolderMutation = useDeleteFolder();
+
 
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
@@ -153,6 +158,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
         });
       }
 
+      // Delete is available for all types
       baseActions.push({
         key: "delete",
         label: "Delete",
@@ -381,13 +387,40 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           // TODO: Navigate to edit screen
           break;
 
-        case "share":
-          console.log(`Share ${selectedItem.type} ${selectedItem.id}`);
-          sheetRef.current?.close();
-          // TODO: Implement share functionality
-          break;
-
         case "delete":
+          if (selectedItem.type === "folder") {
+            Alert.alert(
+              "Delete Folder",
+              `Are you sure you want to delete "${selectedItem.title}"? This will also delete all pages inside this folder.`,
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await deleteFolderMutation.mutateAsync({
+                        id: selectedItem.id,
+                      });
+
+                      Alert.alert("Success", "Folder deleted successfully");
+                      sheetRef.current?.close();
+                    } catch (error) {
+                      console.error("Error deleting folder:", error);
+                      Alert.alert(
+                        "Error",
+                        "Failed to delete folder. Please try again."
+                      );
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            // Generic delete for other types (pages, tags)
           Alert.alert(
             "Delete Item",
             `Are you sure you want to delete "${selectedItem.title}"?`,
@@ -1030,7 +1063,11 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                     (item.key === "create-page" ||
                       item.key === "create-canvas")) ||
                   (createFolderMutation.isPending &&
-                    item.key === "create-folder")
+                    item.key === "create-folder") ||
+                  (createTagMutation.isPending && item.key === "create-tag") ||
+                  (deleteFolderMutation.isPending &&
+                    item.key === "delete" &&
+                    selectedItem?.type === "folder")
                 }
               >
                 {(archiveTagMutation.isPending && item.key === "archive") ||
@@ -1038,7 +1075,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   (item.key === "create-page" ||
                     item.key === "create-canvas")) ||
                 (createFolderMutation.isPending &&
-                  item.key === "create-folder") ? (
+                (deleteFolderMutation.isPending &&
+                  item.key === "delete" &&
+                  selectedItem?.type === "folder") ? (
                   <ActivityIndicator
                     size="small"
                     color="#4B5563"

@@ -70,7 +70,11 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
         method: "PUT",
         body: data ? JSON.stringify(data) : undefined,
       }),
-    delete: (endpoint: string) => request(endpoint, { method: "DELETE" }),
+    delete: (endpoint: string, data?: any) =>
+      request(endpoint, {
+        method: "DELETE",
+        body: data ? JSON.stringify(data) : undefined,
+      }),
   };
 };
 
