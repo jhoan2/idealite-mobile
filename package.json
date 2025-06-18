@@ -11,7 +11,6 @@
     "lint": "expo lint"
   },
   "dependencies": {
-    "@10play/tentap-editor": "^0.7.2",
     "@clerk/clerk-expo": "^2.13.0",
     "@expo/vector-icons": "^14.1.0",
     "@gorhom/bottom-sheet": "5",
@@ -23,6 +22,7 @@
     "@tanstack/react-query": "^5.80.7",
     "expo": "~53.0.10",
     "expo-application": "~6.1.4",
+    "expo-auth-session": "~6.2.0",
     "expo-blur": "~14.1.5",
     "expo-constants": "~17.1.6",
     "expo-crypto": "~14.1.5",
@@ -57,7 +57,15 @@
     "react-native-webview": "13.13.5",
     "tailwindcss": "3.4.17",
     "zustand": "^5.0.5",
-    "expo-auth-session": "~6.2.0"
+    "@tiptap/react": "2.9.1",
+    "@tiptap/starter-kit": "2.9.1",
+    "@tiptap/extension-bubble-menu": "2.9.1",
+    "@tiptap/extension-focus": "2.9.1",
+    "@tiptap/extension-image": "2.9.1",
+    "@tiptap/extension-placeholder": "2.9.1",
+    "@tiptap/extension-task-item": "2.9.1",
+    "@tiptap/extension-task-list": "2.9.1",
+    "@tiptap/extension-typography": "2.9.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
