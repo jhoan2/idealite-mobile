@@ -1102,6 +1102,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
       {/* Action Bottom Sheet */}
       <BottomSheet
         ref={sheetRef}
+        index={-1}
         snapPoints={snapPoints}
         enablePanDownToClose
         backdropComponent={(props) => (
