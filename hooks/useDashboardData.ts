@@ -44,19 +44,25 @@ export const useDashboardData = () => {
   return useQuery<DashboardResponse>({
     queryKey: ["dashboard"],
     queryFn: async () => {
-      return await apiClient.get("/api/v1/dashboard");
+      return apiClient.get("/api/v1/dashboard");
     },
     enabled: !!isSignedIn,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: true,
     retry: (failureCount, error) => {
-      // Retry up to 3 times for network errors
+      // Don't retry on authentication errors (401)
+      if (error && "status" in error && error.status === 401) {
+        return false;
+      }
+
+      // Retry up to 3 times for other network errors
       if (failureCount < 3) {
         return true;
       }
       return false;
     },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
     meta: {
       onError: (error: Error) => {
         Sentry.captureException(error, {

@@ -5,9 +5,9 @@ import React, { useCallback } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CardActivityStats } from "../../../components/dashboard/CardActivityStats";
-import { CardStatusChart } from "../../../components/dashboard/CardStatusChart";
 import { DashboardError } from "../../../components/dashboard/DashboardError";
 import { DashboardLoading } from "../../../components/dashboard/DashboardLoading";
+import StackedHorizontalBarChart from "../../../components/dashboard/StackedHorizontalBarChart";
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
 export default function HomeScreen() {
@@ -91,96 +91,10 @@ export default function HomeScreen() {
           ) : dashboardData ? (
             <>
               {/* Card Activity Stats */}
-              <View className="mb-6">
-                <CardActivityStats stats={dashboardData.cardActivity} />
-              </View>
-
-              {/* Charts Section */}
               <View className="gap-4">
-                {/* Tag Mastery Chart */}
-
-                {/* Card Status Distribution Chart */}
-                <CardStatusChart
-                  data={dashboardData.cardDistribution}
-                  totalCards={dashboardData.totalCards}
-                />
+                <CardActivityStats stats={dashboardData.cardActivity} />
+                <StackedHorizontalBarChart />
               </View>
-
-              {/* Quick Insights Section */}
-              {dashboardData.totalCards > 0 && (
-                <View className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mt-4">
-                  <Text className="text-lg font-semibold text-gray-900 mb-4">
-                    📊 Quick Insights
-                  </Text>
-
-                  <View className="gap-3">
-                    <View className="flex-row items-center">
-                      <View className="w-2 h-2 bg-blue-500 rounded-full mr-3" />
-                      <Text className="text-sm text-gray-700 flex-1">
-                        You have {dashboardData.totalCards.toLocaleString()}{" "}
-                        total flashcards
-                      </Text>
-                    </View>
-
-                    {dashboardData.cardActivity.cardsCreatedThisWeek > 0 && (
-                      <View className="flex-row items-center">
-                        <View className="w-2 h-2 bg-green-500 rounded-full mr-3" />
-                        <Text className="text-sm text-gray-700 flex-1">
-                          Created{" "}
-                          {dashboardData.cardActivity.cardsCreatedThisWeek} new
-                          cards this week
-                        </Text>
-                      </View>
-                    )}
-
-                    {dashboardData.cardActivity.cardsDueThisWeek > 0 && (
-                      <View className="flex-row items-center">
-                        <View className="w-2 h-2 bg-amber-500 rounded-full mr-3" />
-                        <Text className="text-sm text-gray-700 flex-1">
-                          {dashboardData.cardActivity.cardsDueThisWeek} cards
-                          due this week
-                        </Text>
-                      </View>
-                    )}
-
-                    {dashboardData.tagMastery.length > 0 && (
-                      <View className="flex-row items-center">
-                        <View className="w-2 h-2 bg-purple-500 rounded-full mr-3" />
-                        <Text className="text-sm text-gray-700 flex-1">
-                          Tracking progress across{" "}
-                          {dashboardData.tagMastery.length} subjects
-                        </Text>
-                      </View>
-                    )}
-
-                    {dashboardData.cardActivity.reviewCompletionRate > 0 && (
-                      <View className="flex-row items-center">
-                        <View className="w-2 h-2 bg-rose-500 rounded-full mr-3" />
-                        <Text className="text-sm text-gray-700 flex-1">
-                          {dashboardData.cardActivity.reviewCompletionRate}%
-                          review completion rate
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              )}
-
-              {/* Study Tip Section */}
-              {dashboardData.totalCards > 0 && (
-                <View className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mt-4 border border-blue-100">
-                  <Text className="text-lg font-semibold text-blue-900 mb-2">
-                    💡 Study Tip
-                  </Text>
-                  <Text className="text-sm text-blue-700 leading-relaxed">
-                    {dashboardData.cardActivity.cardsDueThisWeek > 0
-                      ? "You have cards due this week! Regular review sessions help improve long-term retention."
-                      : dashboardData.cardActivity.cardsCreatedThisWeek > 0
-                      ? "Great job creating new cards! Try to review them within 24 hours for better retention."
-                      : "Consider creating new flashcards for topics you're currently studying to reinforce your learning."}
-                  </Text>
-                </View>
-              )}
             </>
           ) : (
             // Fallback empty state
