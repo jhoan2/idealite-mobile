@@ -14,106 +14,72 @@ export default function StackedHorizontalBarChart() {
 
   if (!stackData.length) {
     return (
-      <View style={{ padding: 16, alignItems: "center" }}>
-        <Text>No data available</Text>
+      <View className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <Text className="text-lg font-semibold text-gray-900 mb-1 text-center">
+          Tag Mastery Progress
+        </Text>
+        <Text className="text-sm text-gray-600 mb-4 text-center">
+          By learning status
+        </Text>
+        <View className="flex-1 items-center justify-center py-8">
+          <Text className="text-gray-500 text-center">No data available</Text>
+          <Text className="text-sm text-gray-400 text-center mt-1">
+            Create some flashcards to see tag progress
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View>
-      <View>
-        {/* Chart Title */}
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "bold",
-            marginBottom: 8,
-            color: "#111827",
-          }}
-        >
-          Tag Mastery Progress
-        </Text>
+    <View className="bg-white rounded-xl shadow-sm border border-gray-200">
+      {/* Header */}
+      <Text className="text-lg pt-6 font-semibold text-gray-900 mb-1 text-center">
+        Tag Mastery Progress
+      </Text>
+      <Text className="text-sm text-gray-600 mb-6 text-center">
+        Tap any bar to see detailed stats
+      </Text>
 
-        {/* Subtitle */}
-        <Text
-          style={{
-            fontSize: 14,
-            color: "#6b7280",
-            marginBottom: 16,
-          }}
-        >
-          Tap any bar to see detailed stats
-        </Text>
-
-        {/* Legend */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 16,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View
-              style={{
-                width: 12,
-                height: 12,
-                backgroundColor: "#10b981",
-                borderRadius: 6,
-                marginRight: 4,
-              }}
-            />
-            <Text style={{ fontSize: 11, color: "#374151" }}>Mastered</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View
-              style={{
-                width: 12,
-                height: 12,
-                backgroundColor: "#3b82f6",
-                borderRadius: 6,
-                marginRight: 4,
-              }}
-            />
-            <Text style={{ fontSize: 11, color: "#374151" }}>Active</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View
-              style={{
-                width: 12,
-                height: 12,
-                backgroundColor: "#6b7280",
-                borderRadius: 6,
-                marginRight: 4,
-              }}
-            />
-            <Text style={{ fontSize: 11, color: "#374151" }}>Suspended</Text>
-          </View>
+      {/* Legend */}
+      <View className="flex-row justify-center items-center  gap-6">
+        <View className="flex-row items-center">
+          <View className="w-3 h-3 bg-green-500 rounded-sm mr-2" />
+          <Text className="text-xs text-gray-700">Mastered</Text>
+        </View>
+        <View className="flex-row items-center">
+          <View className="w-3 h-3 bg-blue-500 rounded-sm mr-2" />
+          <Text className="text-xs text-gray-700">Active</Text>
+        </View>
+        <View className="flex-row items-center">
+          <View className="w-3 h-3 bg-gray-500 rounded-sm mr-2" />
+          <Text className="text-xs text-gray-700">Suspended</Text>
         </View>
       </View>
 
       {/* Chart */}
-      <BarChart
-        width={screenWidth - 120}
-        stackData={stackData}
-        horizontal
-        rotateLabel
-        noOfSections={4}
-        spacing={18}
-        // Styling
-        yAxisTextStyle={{
-          fontSize: 10,
-          color: "#6b7280",
-        }}
-        xAxisLabelTextStyle={{
-          fontSize: 10,
-          color: "#6b7280",
-        }}
-        // Animation
-        isAnimated
-        animationDuration={800}
-      />
+      <View className="pb-6">
+        <BarChart
+          width={screenWidth - 120}
+          stackData={stackData}
+          horizontal
+          rotateLabel
+          noOfSections={4}
+          spacing={18}
+          // Styling
+          yAxisTextStyle={{
+            fontSize: 10,
+            color: "#6b7280",
+          }}
+          xAxisLabelTextStyle={{
+            fontSize: 10,
+            color: "#6b7280",
+          }}
+          // Animation
+          isAnimated
+          animationDuration={800}
+        />
+      </View>
     </View>
   );
 }
