@@ -6,6 +6,7 @@ import BottomSheet, {
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import * as Sentry from "@sentry/react-native";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -39,6 +40,7 @@ const MODAL_WIDTH = SCREEN_WIDTH * 0.85;
 const INDENT_SIZE = 16;
 
 export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
+  const router = useRouter();
   const { top, bottom } = useSafeAreaInsets();
 
   // Use the React Query hook
@@ -635,8 +637,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
   const handlePagePress = (pageId: string, title: string) => {
     try {
-      // TODO: Navigate to page
-      console.log(`Navigate to page: ${pageId} - ${title}`);
+      // Navigate to the note editor with the page ID
+      router.push(`/workspace/${pageId}`);
       onClose();
     } catch (error) {
       Sentry.captureException(error, {

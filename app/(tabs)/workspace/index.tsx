@@ -8,7 +8,6 @@ export default function WorkspaceScreen() {
       <View className="flex-1">
         <Text>Workspace</Text>
       </View>
-      {/* Tag Tree Modal */}
     </SafeAreaView>
   );
 }
