@@ -72,46 +72,49 @@ export function StatCard({
 
   return (
     <View
-      className={`${styles.background} rounded-xl p-4 shadow-sm border border-gray-200`}
+      className={`${styles.background} rounded-xl p-4 shadow-sm border border-gray-200 min-h-[120px]`}
     >
       {/* Header Row */}
-      <View className="flex-row items-start justify-between mb-3">
-        <View className="flex-1">
-          <Text className="text-sm font-medium text-gray-600 mb-1">
-            {title}
-          </Text>
-
-          {/* Value and Trend */}
-          <View className="flex-row items-baseline">
-            <Text className={`text-2xl font-bold ${styles.text}`}>
-              {value.toLocaleString()}
-              {isPercentage && "%"}
+      <View className="flex-row items-start justify-between mb-3 flex-1">
+        <View className="flex-1 justify-between">
+          <View>
+            <Text className="text-sm font-medium text-gray-600 mb-1">
+              {title}
             </Text>
 
-            {changePercent !== undefined && !isZero && (
-              <View className={`ml-2 flex-row items-center ${trendColor}`}>
-                <Ionicons
-                  name={trendIcon}
-                  size={12}
-                  color={
-                    trendColor.includes("green")
-                      ? "#16a34a"
-                      : trendColor.includes("rose")
-                      ? "#dc2626"
-                      : "#6b7280"
-                  }
-                />
-                <Text className={`text-xs font-medium ml-1 ${trendColor}`}>
-                  {isPercentagePoint
-                    ? `${isIncrease ? "+" : ""}${changePercent} pts`
-                    : `${isIncrease ? "+" : ""}${changePercent}%`}
-                </Text>
-              </View>
-            )}
+            {/* Value and Trend */}
+            <View className="flex-row items-baseline">
+              <Text className={`text-2xl font-bold ${styles.text}`}>
+                {value.toLocaleString()}
+                {isPercentage && "%"}
+              </Text>
+
+              {changePercent !== undefined && !isZero && (
+                <View className={`ml-2 flex-row items-center ${trendColor}`}>
+                  <Ionicons
+                    name={trendIcon}
+                    size={12}
+                    color={
+                      trendColor.includes("green")
+                        ? "#16a34a"
+                        : trendColor.includes("rose")
+                        ? "#dc2626"
+                        : "#6b7280"
+                    }
+                  />
+                  <Text className={`text-xs font-medium ml-1 ${trendColor}`}>
+                    {isPercentagePoint
+                      ? `${isIncrease ? "+" : ""}${changePercent} pts`
+                      : `${isIncrease ? "+" : ""}${changePercent}%`}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
+          {/* Description at bottom */}
           {description && (
-            <Text className="text-xs text-gray-500 mt-1">{description}</Text>
+            <Text className="text-xs text-gray-500 mt-auto">{description}</Text>
           )}
         </View>
 
