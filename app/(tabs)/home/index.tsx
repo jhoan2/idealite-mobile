@@ -5,6 +5,7 @@ import React, { useCallback } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CardActivityStats } from "../../../components/dashboard/CardActivityStats";
+import { CardStatusPieChart } from "../../../components/dashboard/CardStatusPieChart";
 import { DashboardError } from "../../../components/dashboard/DashboardError";
 import { DashboardLoading } from "../../../components/dashboard/DashboardLoading";
 import StackedHorizontalBarChart from "../../../components/dashboard/StackedHorizontalBarChart";
@@ -94,6 +95,10 @@ export default function HomeScreen() {
               <View className="gap-4">
                 <CardActivityStats stats={dashboardData.cardActivity} />
                 <StackedHorizontalBarChart />
+                <CardStatusPieChart
+                  data={dashboardData.cardDistribution}
+                  totalCards={dashboardData.totalCards}
+                />
               </View>
             </>
           ) : (
