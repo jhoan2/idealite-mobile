@@ -1,10 +1,11 @@
 // app/(tabs)/home/index.tsx - Complete Dashboard Implementation
 import { useAuth } from "@clerk/clerk-expo";
 import * as Sentry from "@sentry/react-native";
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CardActivityStats } from "../../../components/dashboard/CardActivityStats";
+import { CardDistributionPieChart } from "../../../components/dashboard/CardDistributionPieChart";
 import { CardStatusChart } from "../../../components/dashboard/CardStatusChart";
 import { DashboardError } from "../../../components/dashboard/DashboardError";
 import { DashboardLoading } from "../../../components/dashboard/DashboardLoading";
@@ -97,6 +98,12 @@ export default function HomeScreen() {
 
               {/* Charts Section */}
               <View className="gap-4">
+                {/* Card Distribution Pie Chart */}
+                <CardDistributionPieChart
+                  data={dashboardData.cardDistribution}
+                  totalCards={dashboardData.totalCards}
+                />
+
                 {/* Tag Mastery Chart */}
 
                 {/* Card Status Distribution Chart */}
