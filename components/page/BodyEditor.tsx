@@ -1,5 +1,10 @@
 // components/page/BodyEditor.tsx
-import { RichText, Toolbar, useEditorBridge } from "@10play/tentap-editor";
+import {
+  RichText,
+  TenTapStartKit,
+  Toolbar,
+  useEditorBridge,
+} from "@10play/tentap-editor";
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,6 +15,16 @@ import {
 } from "react-native";
 import { editorHtml } from "../../editor-web/build/editorHtml";
 import { usePage } from "../../hooks/page/usePage";
+import { BlockquoteWithIds } from "./extensions/BlockquoteWithIds";
+import { BulletListWithIds } from "./extensions/BulletListWithIds";
+import { CodeBlockWithIds } from "./extensions/CodeBlockWithIds";
+import { HeadingWithIds } from "./extensions/HeadingWithIds";
+import { ImageWithIds } from "./extensions/ImageWithIds";
+import { ListItemWithIds } from "./extensions/ListItemWithIds";
+import { OrderedListWithIds } from "./extensions/OrderedListWithIds";
+import { ParagraphWithIds } from "./extensions/ParagraphWithIds";
+import { TaskItemWithIds } from "./extensions/TaskItemWithIds";
+import { TaskListWithIds } from "./extensions/TaskListWithIds";
 
 interface BodyEditorProps {
   pageId: string;
@@ -26,6 +41,19 @@ export default function BodyEditor({
 
   const editor = useEditorBridge({
     customSource: editorHtml,
+    bridgeExtensions: [
+      ...TenTapStartKit,
+      ParagraphWithIds,
+      HeadingWithIds,
+      ListItemWithIds,
+      BlockquoteWithIds,
+      CodeBlockWithIds,
+      ImageWithIds,
+      OrderedListWithIds,
+      TaskListWithIds,
+      TaskItemWithIds,
+      BulletListWithIds,
+    ],
     autofocus: false,
     avoidIosKeyboard: true,
     initialContent,
