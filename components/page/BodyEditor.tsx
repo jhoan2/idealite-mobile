@@ -5,7 +5,6 @@ import {
   TenTapStartKit,
   Toolbar,
   useEditorBridge,
-  type ToolbarItem,
 } from "@10play/tentap-editor";
 import React, { useRef, useState } from "react";
 import {
@@ -17,6 +16,7 @@ import {
 } from "react-native";
 import { editorHtml } from "../../editor-web/build/editorHtml";
 import { usePage } from "../../hooks/page/usePage";
+import { useApiClient } from "../../lib/api/client";
 import { BlockquoteWithIds } from "./extensions/BlockquoteWithIds";
 import { BulletListWithIds } from "./extensions/BulletListWithIds";
 import { CodeBlockWithIds } from "./extensions/CodeBlockWithIds";
@@ -27,24 +27,19 @@ import { OrderedListWithIds } from "./extensions/OrderedListWithIds";
 import { ParagraphWithIds } from "./extensions/ParagraphWithIds";
 import { TaskItemWithIds } from "./extensions/TaskItemWithIds";
 import { TaskListWithIds } from "./extensions/TaskListWithIds";
+import { createFlashcardItem } from "./toolbar/FlashcardToolbarItem";
 
 interface BodyEditorProps {
   pageId: string;
   initialContent: string;
 }
 
-const symbolItem: ToolbarItem = {
-  onPress: () => () => console.log("symbol clicked"),
-  active: () => false,
-  disabled: () => false,
-  image: () => require("../../assets/images/icon48.png"), // TODO: replace with actual symbol
-};
-
 export default function BodyEditor({
   pageId,
   initialContent,
 }: BodyEditorProps) {
   const { updatePage, isUpdating } = usePage(pageId);
+  const api = useApiClient();
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -69,22 +64,25 @@ export default function BodyEditor({
     onChange: () => {
       setHasUnsaved(true);
 
-      // clear any pending save
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
 
-      // schedule a save 2s after typing stops
       debounceRef.current = setTimeout(async () => {
         try {
           const html = await editor.getHTML();
           await updatePage({ content: html });
           setHasUnsaved(false);
         } catch (err) {
-          console.error("Body auto-save failed", err);
-          // you can Alert here if you like
+          console.error("Body auto‐save failed", err);
         }
       }, 2000);
     },
   });
+
+  // Create toolbar items for Q&A and Cloze flashcard generation
+  const qaItem = createFlashcardItem("question-answer", editor, pageId, api);
+  const clozeItem = createFlashcardItem("cloze", editor, pageId, api);
 
   return (
     <View style={styles.container}>
@@ -93,14 +91,16 @@ export default function BodyEditor({
           <ActivityIndicator size="small" />
         </View>
       )}
+
       <RichText editor={editor} style={styles.editor} />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.toolbar}
       >
         <Toolbar
           editor={editor}
-          items={[symbolItem, ...DEFAULT_TOOLBAR_ITEMS]}
+          items={[qaItem, clozeItem, ...DEFAULT_TOOLBAR_ITEMS]}
         />
       </KeyboardAvoidingView>
     </View>
