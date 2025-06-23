@@ -1,9 +1,11 @@
 // components/page/BodyEditor.tsx
 import {
+  DEFAULT_TOOLBAR_ITEMS,
   RichText,
   TenTapStartKit,
   Toolbar,
   useEditorBridge,
+  type ToolbarItem,
 } from "@10play/tentap-editor";
 import React, { useRef, useState } from "react";
 import {
@@ -30,6 +32,13 @@ interface BodyEditorProps {
   pageId: string;
   initialContent: string;
 }
+
+const symbolItem: ToolbarItem = {
+  onPress: () => () => console.log("symbol clicked"),
+  active: () => false,
+  disabled: () => false,
+  image: () => require("../../assets/images/icon48.png"), // TODO: replace with actual symbol
+};
 
 export default function BodyEditor({
   pageId,
@@ -89,7 +98,10 @@ export default function BodyEditor({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.toolbar}
       >
-        <Toolbar editor={editor} />
+        <Toolbar
+          editor={editor}
+          items={[symbolItem, ...DEFAULT_TOOLBAR_ITEMS]}
+        />
       </KeyboardAvoidingView>
     </View>
   );
