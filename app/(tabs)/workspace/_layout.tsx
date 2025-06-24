@@ -1,4 +1,4 @@
-// app/(tabs)/workspace/_layout.tsx - Stack navigator for workspace with menu button
+// app/(tabs)/workspace/_layout.tsx - Updated to show menu on all screens
 import { Ionicons } from "@expo/vector-icons";
 import * as Sentry from "@sentry/react-native";
 import { Stack } from "expo-router";
@@ -23,6 +23,17 @@ export default function WorkspaceLayout() {
     }
   };
 
+  // Common header left component
+  const HeaderLeft = () => (
+    <TouchableOpacity
+      onPress={handleMenuPress}
+      className="p-2 -ml-2"
+      activeOpacity={0.7}
+    >
+      <Ionicons name="menu-outline" size={24} color="#18181b" />
+    </TouchableOpacity>
+  );
+
   return (
     <>
       <Stack
@@ -37,30 +48,24 @@ export default function WorkspaceLayout() {
             fontSize: 18,
           },
           headerShadowVisible: true,
+          // Add menu button to ALL screens by default
+          headerLeft: () => <HeaderLeft />,
         }}
       >
         <Stack.Screen
           name="index"
           options={{
-            title: "",
-            // Left side menu button
-            headerLeft: () => (
-              <TouchableOpacity
-                onPress={handleMenuPress}
-                className="p-2 -ml-2"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="menu-outline" size={24} color="#18181b" />
-              </TouchableOpacity>
-            ),
+            title: " ",
           }}
         />
         <Stack.Screen
           name="[id]"
           options={{
-            title: "Edit Note",
+            title: " ",
             // Hide tab bar when editing notes
             presentation: "card",
+            // Menu button is already inherited from screenOptions
+            // Just need to customize the back button
             headerBackTitle: "Back",
           }}
         />
@@ -69,11 +74,13 @@ export default function WorkspaceLayout() {
           options={{
             title: "New Note",
             presentation: "modal", // Present as modal for creating new notes
+            // For modal screens, you might want to customize this differently
+            headerLeft: () => <HeaderLeft />,
           }}
         />
       </Stack>
 
-      {/* Tag Tree Modal */}
+      {/* Tag Tree Modal - Available from all workspace screens */}
       <TagTreeModal
         visible={showTagTree}
         onClose={() => setShowTagTree(false)}
