@@ -28,6 +28,7 @@ import { ParagraphWithIds } from "./extensions/ParagraphWithIds";
 import { TaskItemWithIds } from "./extensions/TaskItemWithIds";
 import { TaskListWithIds } from "./extensions/TaskListWithIds";
 import { createFlashcardItem } from "./toolbar/FlashcardToolbarItem";
+import { createImageUploadItem } from "./toolbar/ImageUploadItem";
 
 interface BodyEditorProps {
   pageId: string;
@@ -83,6 +84,7 @@ export default function BodyEditor({
   // Create toolbar items for Q&A and Cloze flashcard generation
   const qaItem = createFlashcardItem("question-answer", editor, pageId, api);
   const clozeItem = createFlashcardItem("cloze", editor, pageId, api);
+  const uploadItem = createImageUploadItem(editor);
 
   return (
     <View style={styles.container}>
@@ -100,7 +102,7 @@ export default function BodyEditor({
       >
         <Toolbar
           editor={editor}
-          items={[qaItem, clozeItem, ...DEFAULT_TOOLBAR_ITEMS]}
+          items={[qaItem, clozeItem, uploadItem, ...DEFAULT_TOOLBAR_ITEMS]}
         />
       </KeyboardAvoidingView>
     </View>

@@ -4,8 +4,7 @@ import * as Sentry from "@sentry/react-native";
 // import * as Network from 'expo-network';
 import { Alert } from "react-native";
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://your-app.vercel.app";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // Request timeout in milliseconds
 const REQUEST_TIMEOUT = 30000;
@@ -280,6 +279,46 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
         body: data ? JSON.stringify(data) : undefined,
         ...options,
       }),
+
+    /**
+     * Upload a React Native file object directly via multipart/form-data.
+     * Expects `file` to have { uri, name, type } shape.
+     */
+    uploadImageFileDirect: async (file: {
+      uri: string;
+      name: string;
+      type: string;
+    }) => {
+      // 1. Build form-data
+      const formData = new FormData();
+      formData.append("file", file as any);
+
+      // 2. Get auth token
+      let token: string | null;
+      try {
+        token = await getToken();
+      } catch (err) {
+        throw new ApiError("Failed to get auth token", 401, err, false, true);
+      }
+
+      // 3. Perform fetch
+      const res = await fetch(`${API_BASE_URL}/api/image/cloudflare`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          // Let platform set Content-Type with boundary
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new ApiError(`Upload failed: ${text}`, res.status);
+      }
+
+      const json = await res.json();
+      return { url: json.cloudflareData.url };
+    },
   };
 };
 
