@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, TextInput, View } from "react-native";
+import { useDebounce } from "use-debounce";
 import { usePage } from "../../hooks/page/usePage";
 
 interface HeadingEditorProps {
@@ -15,8 +16,10 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
   const { page, isLoading, updatePage, isUpdating } = usePage(pageId);
   const [title, setTitle] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedTitle = useRef<string>("");
+
+  // Debounce the title for automatic saving
+  const [debouncedTitle] = useDebounce(title, 800);
 
   // Update local title when page data loads
   useEffect(() => {
@@ -44,20 +47,21 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
     }
   };
 
-  // Handle text change
+  // whenever the debounced value changes, save it
+  useEffect(() => {
+    if (
+      debouncedTitle.trim() &&
+      debouncedTitle.trim() !== lastSavedTitle.current
+    ) {
+      saveTitle(debouncedTitle);
+    }
+  }, [debouncedTitle]);
+
+  // handleTextChange just sets the title
   const handleTextChange = (newTitle: string) => {
     setTitle(newTitle);
     setHasUnsavedChanges(newTitle.trim() !== lastSavedTitle.current);
   };
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, []);
 
   // Show loading state while fetching page data
   if (isLoading) {
