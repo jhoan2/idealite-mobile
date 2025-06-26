@@ -635,10 +635,18 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     setTagName("");
   }, [selectedItem]);
 
-  const handlePagePress = (pageId: string, title: string) => {
+  const handlePagePress = (
+    pageId: string,
+    title: string,
+    contentType?: string
+  ) => {
     try {
-      // Navigate to the note editor with the page ID
-      router.push(`/workspace/${pageId}`);
+      // Navigate based on content type
+      if (contentType === "canvas") {
+        router.push(`/workspace/canvas/${pageId}`);
+      } else {
+        router.push(`/workspace/${pageId}`);
+      }
       onClose();
     } catch (error) {
       Sentry.captureException(error, {
@@ -711,7 +719,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                     paddingLeft: (level + 1) * INDENT_SIZE + 16,
                   },
                 ]}
-                onPress={() => handlePagePress(page.id, page.title || "")}
+                onPress={() =>
+                  handlePagePress(page.id, page.title || "", page.content_type)
+                }
                 onLongPress={() =>
                   openSheet({
                     id: page.id,
@@ -812,7 +822,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   paddingVertical: 4,
                   paddingLeft: (level + 1) * INDENT_SIZE,
                 }}
-                onPress={() => handlePagePress(page.id, page.title || "")}
+                onPress={() =>
+                  handlePagePress(page.id, page.title || "", page.content_type)
+                }
                 onLongPress={() =>
                   openSheet({
                     id: page.id,
