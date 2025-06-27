@@ -1,39 +1,31 @@
 // app/(tabs)/workspace/canvas/[id].tsx
-import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  Text,
+  View,
+} from "react-native";
 
+import CanvasTitleEditor from "../../../../components/canvas/CanvasTitleEditor";
 import MobileCanvasEditor from "../../../../components/canvas/MobileCanvasEditor";
-import { useApiClient } from "../../../../lib/api/client";
-
-interface PageData {
-  id: string;
-  title: string;
-  content: string | null;
-  content_type: "page" | "canvas";
-  updated_at: string | null;
-}
+import { usePage } from "../../../../hooks/page/usePage";
 
 export default function CanvasScreen() {
   const { id: pageId } = useLocalSearchParams<{ id: string }>();
-  const apiClient = useApiClient();
 
-  // Fetch page data
-  const {
-    data: pageData,
-    isLoading,
-    error,
-  } = useQuery<PageData>({
-    queryKey: ["page", pageId],
-    queryFn: async () => {
-      if (!pageId) throw new Error("Page ID is required");
-      const response = await apiClient.get(`/api/v1/pages/${pageId}`);
-      return response;
-    },
-    enabled: !!pageId,
-  });
+  // Use the same usePage hook as regular pages (consistent cache)
+  const { page: pageData, isLoading, error } = usePage(pageId!);
+
+  // Canvas save handler (placeholder)
+  const handleCanvasSave = () => {
+    Alert.alert("Canvas Save", "Canvas save functionality coming next!", [
+      { text: "OK" },
+    ]);
+  };
 
   // Loading state
   if (isLoading) {
@@ -87,13 +79,17 @@ export default function CanvasScreen() {
   return (
     <>
       <StatusBar style="dark" />
-      <View className="flex-1">
-        <MobileCanvasEditor
+      <SafeAreaView className="flex-1 bg-background">
+        {/* Title Editor - separate component, won't affect canvas */}
+        <CanvasTitleEditor
           pageId={pageId!}
-          initialContent={initialContent}
-          title={pageData.title}
+          initialTitle={pageData.title}
+          onCanvasSave={handleCanvasSave}
         />
-      </View>
+
+        {/* Canvas Editor - isolated, won't re-render when title changes */}
+        <MobileCanvasEditor pageId={pageId!} initialContent={initialContent} />
+      </SafeAreaView>
     </>
   );
 }
