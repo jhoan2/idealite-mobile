@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { WebView } from "react-native-webview";
+import ImageUploadBottomSheet from "./ImageUploadBottomSheet";
 
 export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -75,20 +76,15 @@ export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
           onError={(e) => console.error("Canvas WebView error", e.nativeEvent)}
         />
 
-        {/* Bottom Sheet */}
+        {/* Bottom Sheet with Image Upload Component */}
         <BottomSheet
           ref={bottomSheetRef}
           snapPoints={snapPoints}
           index={-1}
           enablePanDownToClose
         >
-          <BottomSheetView style={{ flex: 1, padding: 20 }}>
-            <Text
-              style={{ fontSize: 18, fontWeight: "bold", marginBottom: 20 }}
-            >
-              Image Tools
-            </Text>
-            <Text>Camera and image editing tools will go here</Text>
+          <BottomSheetView style={{ flex: 1 }}>
+            <ImageUploadBottomSheet />
           </BottomSheetView>
         </BottomSheet>
       </View>
