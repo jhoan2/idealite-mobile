@@ -1,7 +1,7 @@
 // components/canvas/SimpleCanvasWebView.tsx
 import { useAuth } from "@clerk/clerk-expo";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { WebView } from "react-native-webview";
@@ -15,9 +15,12 @@ export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
 
   const snapPoints = ["25%", "50%", "100%"];
 
-  const handleOpenBottomSheet = useCallback(() => {
-    bottomSheetRef.current?.expand();
-  }, []);
+  const handleAddToCanvas = (message: any) => {
+    // Send message to WebView
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify(message));
+    }
+  };
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -59,21 +62,25 @@ export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
           onMessage={(e) => {
             const messageData = e.nativeEvent.data;
 
-            // Try to parse JSON messages
             try {
               const parsed = JSON.parse(messageData);
+
               if (parsed.type === "RETRY") {
-                // this will reload the current URL
                 webViewRef.current?.reload();
               } else if (parsed.type === "OPEN_IMAGE_TOOLS") {
                 bottomSheetRef.current?.expand();
+              } else if (parsed.type === "IMAGE_ADDED_SUCCESS") {
+                bottomSheetRef.current?.close();
+              } else if (parsed.type === "IMAGE_ADD_ERROR") {
+                console.error("Image add error:", parsed.error);
               }
-            } catch {
-              // Not JSON, just log it
-              console.log("Non-JSON message:", messageData);
+            } catch (error) {
+              console.error("Error parsing WebView message:", error);
             }
           }}
-          onError={(e) => console.error("Canvas WebView error", e.nativeEvent)}
+          onError={(e) => {
+            console.error("Canvas WebView error:", e.nativeEvent);
+          }}
         />
 
         {/* Bottom Sheet with Image Upload Component */}
@@ -84,7 +91,10 @@ export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
           enablePanDownToClose
         >
           <BottomSheetView style={{ flex: 1 }}>
-            <ImageUploadBottomSheet authToken={authToken} />
+            <ImageUploadBottomSheet
+              authToken={authToken}
+              onAddToCanvas={handleAddToCanvas}
+            />
           </BottomSheetView>
         </BottomSheet>
       </View>
