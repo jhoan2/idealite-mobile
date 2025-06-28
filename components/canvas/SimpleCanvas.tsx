@@ -84,7 +84,7 @@ export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
           enablePanDownToClose
         >
           <BottomSheetView style={{ flex: 1 }}>
-            <ImageUploadBottomSheet />
+            <ImageUploadBottomSheet authToken={authToken} />
           </BottomSheetView>
         </BottomSheet>
       </View>
