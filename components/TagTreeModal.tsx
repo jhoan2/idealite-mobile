@@ -643,9 +643,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     try {
       // Navigate based on content type
       if (contentType === "canvas") {
-        router.push(`/workspace/canvas/${pageId}`);
+        router.navigate(`/workspace/canvas/${pageId}`);
       } else {
-        router.push(`/workspace/${pageId}`);
+        router.navigate(`/workspace/${pageId}`);
       }
       onClose();
     } catch (error) {
