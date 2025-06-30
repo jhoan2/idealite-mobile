@@ -9,35 +9,35 @@ import {
   View,
 } from "react-native";
 import { useDebounce } from "use-debounce";
-import { usePage } from "../../hooks/page/usePage";
+import { usePageTitle } from "../../hooks/page/usePageTitle";
 
 interface CanvasTitleEditorProps {
   pageId: string;
-  initialTitle: string;
   onCanvasSave?: () => void;
 }
 
 export default function CanvasTitleEditor({
   pageId,
-  initialTitle,
   onCanvasSave,
 }: CanvasTitleEditorProps) {
-  const { updatePage, isUpdating } = usePage(pageId);
+  const { title: pageTitle, updateTitle, isUpdating } = usePageTitle(pageId);
 
-  // Title editing state (same pattern as HeadingEditor)
-  const [title, setTitle] = useState(initialTitle);
+  // Title editing state
+  const [title, setTitle] = useState(pageTitle || "Loading..");
   const [hasUnsavedTitleChanges, setHasUnsavedTitleChanges] = useState(false);
-  const lastSavedTitle = useRef<string>(initialTitle);
+  const lastSavedTitle = useRef<string>(pageTitle || "Loading..");
 
   // Debounce the title for automatic saving
   const [debouncedTitle] = useDebounce(title, 800);
 
-  // Update local title when prop changes
+  // Update local title when page title loads
   useEffect(() => {
-    setTitle(initialTitle);
-    lastSavedTitle.current = initialTitle;
-    setHasUnsavedTitleChanges(false);
-  }, [initialTitle]);
+    if (pageTitle) {
+      setTitle(pageTitle);
+      lastSavedTitle.current = pageTitle;
+      setHasUnsavedTitleChanges(false);
+    }
+  }, [pageTitle]);
 
   // Save title to server
   const saveTitle = async (newTitle: string) => {
@@ -45,7 +45,7 @@ export default function CanvasTitleEditor({
     if (!trimmed || trimmed === lastSavedTitle.current) return;
 
     try {
-      await updatePage({ title: trimmed });
+      await updateTitle({ title: trimmed });
       lastSavedTitle.current = trimmed;
       setHasUnsavedTitleChanges(false);
     } catch (err) {
