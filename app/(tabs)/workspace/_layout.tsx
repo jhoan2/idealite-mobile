@@ -1,13 +1,16 @@
-// app/(tabs)/workspace/_layout.tsx - Updated to show menu on all screens
+// app/(tabs)/workspace/_layout.tsx - Updated with right header button
 import { Ionicons } from "@expo/vector-icons";
 import * as Sentry from "@sentry/react-native";
 import { Stack } from "expo-router";
 import React, { useState } from "react";
 import { TouchableOpacity } from "react-native";
+import { PageInfoModal } from "../../../components/PageInfoModal";
 import { TagTreeModal } from "../../../components/TagTreeModal";
 
 export default function WorkspaceLayout() {
   const [showTagTree, setShowTagTree] = useState(false);
+  const [showPageInfo, setShowPageInfo] = useState(false);
+  const [currentPageId, setCurrentPageId] = useState<string | null>(null);
 
   // Handler for menu button
   const handleMenuPress = () => {
@@ -18,6 +21,21 @@ export default function WorkspaceLayout() {
         tags: {
           component: "WorkspaceLayout",
           action: "menu_press",
+        },
+      });
+    }
+  };
+
+  // Handler for page info button
+  const handlePageInfoPress = (pageId: string) => {
+    try {
+      setCurrentPageId(pageId);
+      setShowPageInfo(true);
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          component: "WorkspaceLayout",
+          action: "page_info_press",
         },
       });
     }
@@ -34,11 +52,26 @@ export default function WorkspaceLayout() {
     </TouchableOpacity>
   );
 
+  // Header right component for pages with pageId
+  const HeaderRight = ({ pageId }: { pageId?: string }) => {
+    if (!pageId) return null;
+
+    return (
+      <TouchableOpacity
+        onPress={() => handlePageInfoPress(pageId)}
+        className="p-2 -mr-2"
+        activeOpacity={0.7}
+      >
+        <Ionicons name="information-circle-outline" size={24} color="#18181b" />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <>
       <Stack
         screenOptions={{
-          headerShown: true, // Enable headers - they handle safe areas automatically
+          headerShown: true,
           headerStyle: {
             backgroundColor: "#ffffff",
           },
@@ -48,7 +81,6 @@ export default function WorkspaceLayout() {
             fontSize: 18,
           },
           headerShadowVisible: true,
-          // Add menu button to ALL screens by default
           headerLeft: () => <HeaderLeft />,
         }}
       >
@@ -60,21 +92,26 @@ export default function WorkspaceLayout() {
         />
         <Stack.Screen
           name="canvas/[id]"
-          options={{
-            title: " ",
-            presentation: "card",
-            headerBackTitle: "Back",
+          options={({ route }) => {
+            const { id } = route.params as { id: string };
+            return {
+              title: " ",
+              presentation: "card",
+              headerBackTitle: "Back",
+              headerRight: () => <HeaderRight pageId={id} />,
+            };
           }}
         />
         <Stack.Screen
           name="[id]"
-          options={{
-            title: " ",
-            // Hide tab bar when editing notes
-            presentation: "card",
-            // Menu button is already inherited from screenOptions
-            // Just need to customize the back button
-            headerBackTitle: "Back",
+          options={({ route }) => {
+            const { id } = route.params as { id: string };
+            return {
+              title: " ",
+              presentation: "card",
+              headerBackTitle: "Back",
+              headerRight: () => <HeaderRight pageId={id} />,
+            };
           }}
         />
       </Stack>
@@ -83,6 +120,13 @@ export default function WorkspaceLayout() {
       <TagTreeModal
         visible={showTagTree}
         onClose={() => setShowTagTree(false)}
+      />
+
+      {/* Page Info Modal - Available for pages with pageId */}
+      <PageInfoModal
+        visible={showPageInfo}
+        onClose={() => setShowPageInfo(false)}
+        pageId={currentPageId}
       />
     </>
   );
