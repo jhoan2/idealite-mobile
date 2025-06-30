@@ -49,7 +49,7 @@ export default function ImageUploadBottomSheet({
       mediaTypes: ["images"],
       allowsEditing: true,
       quality: 1,
-      base64: false, // Set to true if you need base64
+      base64: false,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -69,19 +69,14 @@ export default function ImageUploadBottomSheet({
     setIsLoading(true);
 
     try {
-      // Create FormData for React Native
       const formData = new FormData();
-
-      // In React Native, we can pass the URI directly to FormData
       formData.append("image", {
         uri: image.uri,
-        type: "image/jpeg", // or detect from the image
+        type: "image/jpeg",
         name: "image.jpg",
       } as any);
-
       formData.append("prompt", editPrompt);
 
-      // Make API call
       const result = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL}/api/memory-palace/edit/gemini`,
         {
@@ -96,13 +91,10 @@ export default function ImageUploadBottomSheet({
       const data = await result.json();
 
       if (data.success && data.image) {
-        // Update image with the edited version
         setImage({
           id: Date.now(),
-          uri: data.image, // This should be a base64 data URL
+          uri: data.image,
         });
-
-        // Reset edit state
         setEditPrompt("");
         setShowEditInput(false);
       } else {
@@ -131,15 +123,12 @@ export default function ImageUploadBottomSheet({
     setIsLoading(true);
 
     try {
-      // Upload image to Cloudflare
       const formData = new FormData();
       formData.append("file", {
         uri: image.uri,
         type: "image/jpeg",
         name: "test-image.jpg",
       } as any);
-
-      console.log("Uploading image...");
 
       const uploadResult = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL}/api/image/cloudflare`,
@@ -153,10 +142,8 @@ export default function ImageUploadBottomSheet({
       );
 
       const uploadData = await uploadResult.json();
-      console.log("Upload result:", uploadData);
 
       if (uploadResult.ok && uploadData.cloudflareData?.url) {
-        // NEW: Send URL to WebView instead of just showing alert
         const message = {
           type: "IMAGE_UPLOADED",
           imageUrl: uploadData.cloudflareData.url,
@@ -164,14 +151,10 @@ export default function ImageUploadBottomSheet({
           description: description.trim(),
         };
 
-        console.log("Sending to WebView:", message);
-
-        // Send message to WebView via callback
         if (onAddToCanvas) {
           onAddToCanvas(message);
         }
 
-        // Reset state and show success
         setImage(null);
         setDescription("");
         Alert.alert("Success", "Image sent to canvas!");
@@ -186,73 +169,20 @@ export default function ImageUploadBottomSheet({
     }
   };
 
-  const handleTestAddToCanvas = () => {
-    const testImageUrl =
-      "https://idealite.xyz/images/42604eb2-095b-459e-b5eb-30678f7001bc/0fbf9ae3-2be9-4cdc-9a3b-5835e766d382.jpg";
-
-    const message = {
-      type: "IMAGE_UPLOADED",
-      imageUrl: testImageUrl,
-      cloudflareKey:
-        "images/42604eb2-095b-459e-b5eb-30678f7001bc/0fbf9ae3-2be9-4cdc-9a3b-5835e766d382.jpg",
-      description: description.trim(), // Include the description
-      test: true,
-    };
-
-    console.log("Sending test message to WebView:", message);
-
-    // Send message to WebView via callback
-    if (onAddToCanvas) {
-      onAddToCanvas(message);
-    }
-
-    // Clear description after sending
-    setDescription("");
-  };
-
   return (
     <View className="flex-1 p-5">
       <Text className="text-lg font-bold mb-5">Image Tools</Text>
 
-      {/* Test Button */}
-      <TouchableOpacity
-        onPress={handleTestAddToCanvas}
-        className="bg-blue-500 rounded-lg px-4 py-3 items-center justify-center mb-4"
-      >
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="add-outline" size={20} color="white" />
-          <Text className="text-white font-medium">
-            Test Add Image to Canvas
-          </Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Description Input */}
-      <View className="mb-4">
-        <Text className="text-sm font-medium mb-2 text-gray-700">
-          Image Description (for flashcards):
-        </Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="e.g., A diagram showing the water cycle process..."
-          multiline
-          numberOfLines={3}
-          className="border border-gray-300 rounded-lg p-3 text-base bg-white"
-          style={{ textAlignVertical: "top" }}
-        />
-      </View>
-
-      {/* Image Preview Section */}
+      {/* Image + Description Card - Show when image exists */}
       {image && (
-        <View className="mb-4 p-3 border border-gray-300 rounded-lg bg-white">
+        <View className="mb-4 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {/* Image Section */}
           <View className="relative">
             <Image
               source={{ uri: image.uri }}
               style={{
                 width: "100%",
                 height: 200,
-                borderRadius: 8,
               }}
               contentFit="cover"
             />
@@ -263,6 +193,22 @@ export default function ImageUploadBottomSheet({
             >
               <Text className="text-white text-lg font-bold">✕</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Description Section - Inside the card */}
+          <View className="p-4">
+            <Text className="text-sm font-medium mb-2 text-gray-700">
+              Describe this image for flashcards:
+            </Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="e.g., A diagram showing the water cycle process..."
+              multiline
+              numberOfLines={3}
+              className="border border-gray-300 rounded-lg p-3 text-base bg-gray-50"
+              style={{ textAlignVertical: "top" }}
+            />
           </View>
         </View>
       )}
@@ -308,7 +254,7 @@ export default function ImageUploadBottomSheet({
         </View>
       )}
 
-      {/* Upload Button */}
+      {/* Action Buttons */}
       <View className="flex-row justify-between items-center">
         {/* Left side: attach + edit buttons */}
         <View className="flex-row gap-2">
