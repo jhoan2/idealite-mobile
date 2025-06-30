@@ -69,15 +69,6 @@ export default function WorkspaceLayout() {
             headerBackTitle: "Back",
           }}
         />
-        <Stack.Screen
-          name="new"
-          options={{
-            title: "New Note",
-            presentation: "modal", // Present as modal for creating new notes
-            // For modal screens, you might want to customize this differently
-            headerLeft: () => <HeaderLeft />,
-          }}
-        />
       </Stack>
 
       {/* Tag Tree Modal - Available from all workspace screens */}
