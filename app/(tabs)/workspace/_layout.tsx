@@ -59,6 +59,14 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="canvas/[id]"
+          options={{
+            title: " ",
+            presentation: "card",
+            headerBackTitle: "Back",
+          }}
+        />
+        <Stack.Screen
           name="[id]"
           options={{
             title: " ",
