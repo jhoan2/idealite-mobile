@@ -1,6 +1,14 @@
 // components/page/ResourceCard.tsx
 import React, { useState } from "react";
-import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface ResourceCardProps {
   id: string;
@@ -26,6 +34,7 @@ const ResourceCard: React.FC<ResourceCardProps> = ({
   onDelete,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const getTypeIcon = () => {
     switch (type) {
@@ -43,6 +52,39 @@ const ResourceCard: React.FC<ResourceCardProps> = ({
     if (supported) {
       await Linking.openURL(url);
     }
+  };
+
+  const handleDelete = () => {
+    if (!onDelete) return;
+
+    Alert.alert(
+      "Delete Resource",
+      "Are you sure you want to remove this resource?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await onDelete(id);
+            } catch (error) {
+              console.error("Failed to delete resource:", error);
+              Alert.alert(
+                "Error",
+                "Failed to delete resource. Please try again."
+              );
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formatDate = (date: Date | null) => {
@@ -69,10 +111,15 @@ const ResourceCard: React.FC<ResourceCardProps> = ({
         </View>
         {onDelete && (
           <TouchableOpacity
-            onPress={() => onDelete(id)}
+            onPress={handleDelete}
+            disabled={isDeleting}
             className="p-1 rounded-full"
           >
-            <Text className="text-gray-400 text-lg">×</Text>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#6b7280" />
+            ) : (
+              <Text className="text-gray-400 text-lg">×</Text>
+            )}
           </TouchableOpacity>
         )}
       </View>

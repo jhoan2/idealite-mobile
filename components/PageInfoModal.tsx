@@ -122,6 +122,7 @@ export function PageInfoModal({
             resources={page?.resources || []}
             pageId={pageId}
             onDeleteResource={handleDeleteResource}
+            onRefetch={refetch}
           />
         );
       default:
