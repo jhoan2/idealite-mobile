@@ -1,7 +1,7 @@
 // components/PageInfoModal.tsx
 import BottomSheet, {
   BottomSheetBackdrop,
-  BottomSheetView,
+  BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -50,8 +50,6 @@ export function PageInfoModal({
   const { page, isLoading, error, refetch } = usePage(pageId || "");
   const apiClient = useApiClient();
   const [activeTab, setActiveTab] = useState<TabType>("tags");
-
-  const snapPoints = useMemo(() => ["50%", "75%", "90%"], []);
 
   useEffect(() => {
     if (visible && pageId) {
@@ -136,9 +134,9 @@ export function PageInfoModal({
   return (
     <BottomSheet
       ref={sheetRef}
-      snapPoints={snapPoints}
-      index={-1}
+      snapPoints={["50%", "75%", "90%"]}
       enablePanDownToClose
+      enableDynamicSizing={false}
       onClose={handleClose}
       backdropComponent={(props) => (
         <BottomSheetBackdrop
@@ -151,7 +149,10 @@ export function PageInfoModal({
       backgroundStyle={{ backgroundColor: "#FFFFFF" }}
       handleIndicatorStyle={{ backgroundColor: "#D1D5DB", width: 40 }}
     >
-      <BottomSheetView style={{ flex: 1, paddingBottom: bottom }}>
+      <BottomSheetScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
+        showsVerticalScrollIndicator
+      >
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 pt-2 pb-4 border-b border-gray-200">
           <Text className="text-lg font-medium">Page Info</Text>
@@ -189,7 +190,7 @@ export function PageInfoModal({
         ) : (
           renderTabContent()
         )}
-      </BottomSheetView>
+      </BottomSheetScrollView>
     </BottomSheet>
   );
 }
