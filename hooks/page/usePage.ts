@@ -28,6 +28,29 @@ export interface Resource {
   updated_at: Date | null;
 }
 
+export interface Flashcard {
+  id: string;
+  user_id: string;
+  page_id: string | null;
+  resource_id: string | null;
+  card_type: "qa" | "image" | "cloze";
+  question: string | null;
+  answer: string | null;
+  cloze_template: string | null;
+  cloze_answers: string | null;
+  content: string | null;
+  image_cid: string | null;
+  description: string | null;
+  last_reviewed: Date | null;
+  next_review: Date | null;
+  mastered_at: Date | null;
+  status: "active" | "mastered" | "suspended";
+  created_at: Date;
+  updated_at: Date | null;
+  deleted: boolean;
+  source_locator: Record<string, any>;
+}
+
 // Enhanced PageData interface
 interface PageData {
   // Basic page data
@@ -43,6 +66,7 @@ interface PageData {
   tags: Tag[];
   resources: Resource[];
   userTagTree: TreeTag[];
+  flashcards: Flashcard[];
 }
 
 interface UpdatePageData {
@@ -96,10 +120,11 @@ export const usePage = (pageId: string) => {
             }),
             // Always update the timestamp from server response
             updated_at: updateResponse.updated_at || oldData.updated_at,
-            // Preserve enhanced data (tags, resources, userTagTree remain unchanged)
+            // Preserve enhanced data (tags, resources, userTagTree, flashcards remain unchanged)
             tags: oldData.tags,
             resources: oldData.resources,
             userTagTree: oldData.userTagTree,
+            flashcards: oldData.flashcards,
           };
         }
       );
