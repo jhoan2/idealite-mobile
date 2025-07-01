@@ -1,26 +1,29 @@
 import React from "react";
 import { ScrollView, Text, View } from "react-native";
+import ResourceCard from "./ResourceCard";
 
 interface Resource {
   id: string;
+  type: string;
   title: string;
-  url: string;
   description: string | null;
+  url: string;
+  image: string | null;
   author: string | null;
   date_published: Date | null;
-  image: string | null;
-  type: string;
-  og_type: string | null;
-  created_at: Date;
-  updated_at: Date | null;
 }
 
 interface ResourcesTabProps {
   resources: Resource[];
   pageId: string;
+  onDeleteResource?: (resourceId: string) => void;
 }
 
-const ResourcesTab: React.FC<ResourcesTabProps> = ({ resources, pageId }) => (
+const ResourcesTab: React.FC<ResourcesTabProps> = ({
+  resources,
+  pageId,
+  onDeleteResource,
+}) => (
   <ScrollView className="flex-1 px-4">
     <View className="py-4">
       {resources.length === 0 ? (
@@ -30,26 +33,20 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ resources, pageId }) => (
           </Text>
         </View>
       ) : (
-        <View className="space-y-3">
+        <View>
           {resources.map((resource) => (
-            <View key={resource.id} className="bg-gray-50 rounded-lg p-3">
-              <Text className="font-medium text-gray-900 mb-1">
-                {resource.title}
-              </Text>
-              {resource.description && (
-                <Text className="text-sm text-gray-600 mb-2">
-                  {resource.description}
-                </Text>
-              )}
-              <Text className="text-xs text-blue-600" numberOfLines={1}>
-                {resource.url}
-              </Text>
-              {resource.author && (
-                <Text className="text-xs text-gray-500 mt-1">
-                  by {resource.author}
-                </Text>
-              )}
-            </View>
+            <ResourceCard
+              key={resource.id}
+              id={resource.id}
+              type={resource.type}
+              title={resource.title}
+              description={resource.description || null}
+              url={resource.url}
+              image={resource.image || null}
+              author={resource.author || null}
+              date_published={resource.date_published || null}
+              onDelete={onDeleteResource}
+            />
           ))}
         </View>
       )}

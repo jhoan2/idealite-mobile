@@ -95,6 +95,15 @@ export function PageInfoModal({
     }
   };
 
+  const handleDeleteResource = async (resourceId: string) => {
+    try {
+      await apiClient.delete(`/api/v1/pages/${pageId}/resources/${resourceId}`);
+      refetch();
+    } catch (error) {
+      console.error("Failed to delete resource:", error);
+    }
+  };
+
   const tabs = [
     { id: "tags" as TabType, title: "Tags" },
     { id: "resources" as TabType, title: "Resources" },
@@ -113,7 +122,11 @@ export function PageInfoModal({
         );
       case "resources":
         return (
-          <ResourcesTab resources={page?.resources || []} pageId={pageId} />
+          <ResourcesTab
+            resources={page?.resources || []}
+            pageId={pageId}
+            onDeleteResource={handleDeleteResource}
+          />
         );
       default:
         return null;
