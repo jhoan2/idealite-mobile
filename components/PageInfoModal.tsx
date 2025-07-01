@@ -5,7 +5,6 @@ import BottomSheet, {
 } from "@gorhom/bottom-sheet";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePage } from "../hooks/page/usePage";
 import { useApiClient } from "../lib/api/client";
 import ResourcesTab from "./page/ResourcesTab";
@@ -45,7 +44,6 @@ export function PageInfoModal({
   onClose,
   pageId,
 }: PageInfoModalProps) {
-  const { bottom } = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
   const { page, isLoading, error, refetch } = usePage(pageId || "");
   const apiClient = useApiClient();
