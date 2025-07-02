@@ -133,6 +133,7 @@ export function PageInfoModal({
   return (
     <BottomSheet
       ref={sheetRef}
+      index={-1}
       snapPoints={["50%", "75%", "90%"]}
       enablePanDownToClose
       enableDynamicSizing={false}
