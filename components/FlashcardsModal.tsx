@@ -3,9 +3,11 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
-import React, { useEffect, useMemo, useRef } from "react";
+import * as Sentry from "@sentry/react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Text,
   TouchableOpacity,
@@ -13,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Flashcard, usePage } from "../hooks/page/usePage";
+import { useApiClient } from "../lib/api/client";
 
 interface FlashcardsModalProps {
   visible: boolean;
@@ -20,7 +23,11 @@ interface FlashcardsModalProps {
   pageId: string | null;
 }
 
-const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
+const FlashcardItem: React.FC<{
+  card: Flashcard;
+  onDelete: (cardId: string) => void;
+  isDeleting: boolean;
+}> = ({ card, onDelete, isDeleting }) => {
   const getCardTypeIcon = () => {
     switch (card.card_type) {
       case "qa":
@@ -83,13 +90,39 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
             }
             style={{ marginRight: 6 }}
           />
-          <View className={`px-2 py-1 rounded-full bg-gray-100`}>
+          <View className={`px-2 py-1 rounded-full bg-gray-100 mr-2`}>
             <Text
               className={`text-xs font-medium capitalize ${getStatusColor()}`}
             >
               {card.status}
             </Text>
           </View>
+          {/* Delete button */}
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                "Delete Card",
+                "Are you sure you want to delete this flashcard?",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => onDelete(card.id),
+                  },
+                ]
+              );
+            }}
+            disabled={isDeleting}
+            className="p-1 rounded-full"
+            activeOpacity={0.7}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -195,6 +228,10 @@ export function FlashcardsModal({
   const sheetRef = useRef<BottomSheet>(null);
   const { bottom } = useSafeAreaInsets();
   const snapPoints = useMemo(() => ["50%", "75%", "95%"], []);
+  const apiClient = useApiClient();
+
+  // State for tracking deletions
+  const [deletingCards, setDeletingCards] = useState<Set<string>>(new Set());
 
   const { page, isLoading, error, refetch } = usePage(pageId || "");
 
@@ -206,6 +243,8 @@ export function FlashcardsModal({
       sheetRef.current?.snapToIndex(0);
     } else {
       sheetRef.current?.close();
+      // Clear deleting state when modal closes
+      setDeletingCards(new Set());
     }
   }, [visible]);
 
@@ -213,17 +252,59 @@ export function FlashcardsModal({
     onClose();
   };
 
-  // Filter cards by status for quick stats
+  // Delete handler
+  const handleDeleteCard = async (cardId: string) => {
+    try {
+      // Add to deleting set
+      setDeletingCards((prev) => new Set(prev).add(cardId));
+
+      // Call delete API with your pattern
+      await apiClient.delete("/api/v1/cards/delete", { id: cardId });
+
+      // Refresh the page data to update the flashcards list
+      await refetch();
+
+      // Show success message
+      Alert.alert("Success", "Card deleted successfully");
+    } catch (error) {
+      console.error("Error deleting card:", error);
+
+      Sentry.captureException(error, {
+        tags: {
+          component: "FlashcardsModal",
+          action: "delete_card",
+        },
+        extra: {
+          cardId,
+          pageId,
+        },
+      });
+
+      Alert.alert("Error", "Failed to delete card. Please try again.");
+    } finally {
+      // Remove from deleting set
+      setDeletingCards((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+    }
+  };
+
+  // Filter cards by status for quick stats (exclude deleted cards)
   const cardStats = useMemo(() => {
-    const active = flashcards.filter((card) => card.status === "active").length;
-    const mastered = flashcards.filter(
+    const activeCards = flashcards.filter((card) => !card.deleted);
+    const active = activeCards.filter(
+      (card) => card.status === "active"
+    ).length;
+    const mastered = activeCards.filter(
       (card) => card.status === "mastered"
     ).length;
-    const suspended = flashcards.filter(
+    const suspended = activeCards.filter(
       (card) => card.status === "suspended"
     ).length;
 
-    return { active, mastered, suspended };
+    return { active, mastered, suspended, total: activeCards.length };
   }, [flashcards]);
 
   return (
@@ -262,6 +343,33 @@ export function FlashcardsModal({
             <Text className="text-lg font-semibold text-gray-900">
               Flashcards
             </Text>
+            <View className="flex-row items-center mt-1">
+              <Text className="text-sm text-gray-600 mr-4">
+                {cardStats.total} total
+              </Text>
+              {cardStats.total > 0 && (
+                <View className="flex-row items-center space-x-3">
+                  <View className="flex-row items-center">
+                    <View className="w-2 h-2 bg-blue-500 rounded-full mr-1" />
+                    <Text className="text-xs text-gray-600">
+                      {cardStats.active} active
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center">
+                    <View className="w-2 h-2 bg-green-500 rounded-full mr-1" />
+                    <Text className="text-xs text-gray-600">
+                      {cardStats.mastered} mastered
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center">
+                    <View className="w-2 h-2 bg-gray-500 rounded-full mr-1" />
+                    <Text className="text-xs text-gray-600">
+                      {cardStats.suspended} suspended
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
           <TouchableOpacity
             onPress={handleClose}
@@ -295,7 +403,7 @@ export function FlashcardsModal({
                 <Text className="text-white font-medium">Try Again</Text>
               </TouchableOpacity>
             </View>
-          ) : flashcards.length === 0 ? (
+          ) : cardStats.total === 0 ? (
             <View className="flex-1 items-center justify-center py-12">
               <Ionicons name="library-outline" size={48} color="#9CA3AF" />
               <Text className="text-gray-600 text-center font-semibold mt-4">
@@ -308,9 +416,16 @@ export function FlashcardsModal({
           ) : (
             // Flashcards list
             <View>
-              {flashcards.map((card) => (
-                <FlashcardItem key={card.id} card={card} />
-              ))}
+              {flashcards
+                .filter((card) => !card.deleted)
+                .map((card) => (
+                  <FlashcardItem
+                    key={card.id}
+                    card={card}
+                    onDelete={handleDeleteCard}
+                    isDeleting={deletingCards.has(card.id)}
+                  />
+                ))}
             </View>
           )}
         </View>
