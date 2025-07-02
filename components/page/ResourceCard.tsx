@@ -36,17 +36,6 @@ const ResourceCard: React.FC<ResourceCardProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const getTypeIcon = () => {
-    switch (type) {
-      case "book":
-        return "📚";
-      case "research-paper":
-        return "🔬";
-      default:
-        return "🔗";
-    }
-  };
-
   const handleOpenUrl = async () => {
     const supported = await Linking.canOpenURL(url);
     if (supported) {
@@ -105,10 +94,6 @@ const ResourceCard: React.FC<ResourceCardProps> = ({
     <View className="bg-white rounded-lg border border-gray-200 mb-3 overflow-hidden">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
-        <View className="flex-row items-center">
-          <Text className="text-lg mr-2">{getTypeIcon()}</Text>
-          <Text className="text-sm text-gray-500 capitalize">{type}</Text>
-        </View>
         {onDelete && (
           <TouchableOpacity
             onPress={handleDelete}
