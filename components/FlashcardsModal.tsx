@@ -4,7 +4,13 @@ import BottomSheet, {
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import React, { useEffect, useMemo, useRef } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Flashcard, usePage } from "../hooks/page/usePage";
 
@@ -41,6 +47,19 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
     }
   };
 
+  const getStatusIcon = () => {
+    switch (card.status) {
+      case "active":
+        return "radio-button-off-outline";
+      case "mastered":
+        return "checkmark-circle-outline";
+      case "suspended":
+        return "pause-circle-outline";
+      default:
+        return "radio-button-off-outline";
+    }
+  };
+
   return (
     <View className="bg-white rounded-xl p-4 mb-3 border border-gray-200 shadow-sm">
       {/* Header */}
@@ -52,6 +71,18 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
           </Text>
         </View>
         <View className="flex-row items-center">
+          <Ionicons
+            name={getStatusIcon() as any}
+            size={16}
+            color={
+              card.status === "active"
+                ? "#3B82F6"
+                : card.status === "mastered"
+                ? "#10B981"
+                : "#6B7280"
+            }
+            style={{ marginRight: 6 }}
+          />
           <View className={`px-2 py-1 rounded-full bg-gray-100`}>
             <Text
               className={`text-xs font-medium capitalize ${getStatusColor()}`}
@@ -63,7 +94,25 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
       </View>
 
       {/* Content */}
-      {card.card_type === "qa" && (
+      {card.image_cid ? (
+        // Image card display
+        <View className="space-y-2">
+          <Image
+            source={{ uri: `https://idealite.xyz/${card.image_cid}` }}
+            className="w-full h-48 rounded-lg"
+            resizeMode="cover"
+          />
+          {card.description && (
+            <View>
+              <Text className="text-xs font-medium text-gray-500 mb-1">
+                Description
+              </Text>
+              <Text className="text-gray-700">{card.description}</Text>
+            </View>
+          )}
+        </View>
+      ) : card.card_type === "qa" ? (
+        // Q&A card display
         <View>
           {card.question && (
             <View className="mb-2">
@@ -82,9 +131,8 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
             </View>
           )}
         </View>
-      )}
-
-      {card.card_type === "cloze" && (
+      ) : card.card_type === "cloze" ? (
+        // Cloze card display
         <View>
           {card.cloze_template && (
             <View className="mb-2">
@@ -103,17 +151,18 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
             </View>
           )}
         </View>
-      )}
-
-      {card.content && (
-        <View className="mt-2">
-          <Text className="text-xs font-medium text-gray-500 mb-1">
-            Content
-          </Text>
-          <Text className="text-gray-700 text-sm" numberOfLines={3}>
-            {card.content}
-          </Text>
-        </View>
+      ) : (
+        // Default content display
+        card.content && (
+          <View>
+            <Text className="text-xs font-medium text-gray-500 mb-1">
+              Content
+            </Text>
+            <Text className="text-gray-700 text-sm" numberOfLines={3}>
+              {card.content}
+            </Text>
+          </View>
+        )
       )}
 
       {/* Footer with timestamps */}
@@ -124,6 +173,12 @@ const FlashcardItem: React.FC<{ card: Flashcard }> = ({ card }) => {
             <>
               {" • "}
               Last reviewed: {new Date(card.last_reviewed).toLocaleDateString()}
+            </>
+          )}
+          {card.next_review && (
+            <>
+              {" • "}
+              Next review: {new Date(card.next_review).toLocaleDateString()}
             </>
           )}
         </Text>
@@ -157,6 +212,19 @@ export function FlashcardsModal({
   const handleClose = () => {
     onClose();
   };
+
+  // Filter cards by status for quick stats
+  const cardStats = useMemo(() => {
+    const active = flashcards.filter((card) => card.status === "active").length;
+    const mastered = flashcards.filter(
+      (card) => card.status === "mastered"
+    ).length;
+    const suspended = flashcards.filter(
+      (card) => card.status === "suspended"
+    ).length;
+
+    return { active, mastered, suspended };
+  }, [flashcards]);
 
   return (
     <BottomSheet
@@ -193,9 +261,6 @@ export function FlashcardsModal({
           <View className="flex-1">
             <Text className="text-lg font-semibold text-gray-900">
               Flashcards
-            </Text>
-            <Text className="text-sm text-gray-600 mt-1">
-              {flashcards.length} card{flashcards.length !== 1 ? "s" : ""} found
             </Text>
           </View>
           <TouchableOpacity
