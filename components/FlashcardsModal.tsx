@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -26,8 +27,48 @@ interface FlashcardsModalProps {
 const FlashcardItem: React.FC<{
   card: Flashcard;
   onDelete: (cardId: string) => void;
+  onUpdate: (cardId: string, updates: any) => void;
   isDeleting: boolean;
-}> = ({ card, onDelete, isDeleting }) => {
+  isUpdating: boolean;
+}> = ({ card, onDelete, onUpdate, isDeleting, isUpdating }) => {
+  // Edit state management (matching web app pattern)
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(card.content || "");
+  const [editedDescription, setEditedDescription] = useState(
+    card.description || ""
+  );
+  const [editedQuestion, setEditedQuestion] = useState(card.question || "");
+  const [editedAnswer, setEditedAnswer] = useState(card.answer || "");
+
+  // Update local state when card changes
+  useEffect(() => {
+    setEditedContent(card.content || "");
+    setEditedDescription(card.description || "");
+    setEditedQuestion(card.question || "");
+    setEditedAnswer(card.answer || "");
+  }, [card]);
+
+  const handleSave = () => {
+    const updates = {
+      content: editedContent,
+      description: editedDescription,
+      question: editedQuestion,
+      answer: editedAnswer,
+    };
+
+    onUpdate(card.id, updates);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    // Reset to original values
+    setEditedContent(card.content || "");
+    setEditedDescription(card.description || "");
+    setEditedQuestion(card.question || "");
+    setEditedAnswer(card.answer || "");
+    setIsEditing(false);
+  };
+
   const getCardTypeIcon = () => {
     switch (card.card_type) {
       case "qa":
@@ -67,6 +108,113 @@ const FlashcardItem: React.FC<{
     }
   };
 
+  // If in editing mode, show edit interface
+  if (isEditing) {
+    return (
+      <View className="bg-white rounded-xl p-4 mb-3 border border-gray-200 shadow-sm">
+        {/* Edit Header */}
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="text-lg font-semibold text-gray-900">Edit Card</Text>
+          <View className="flex-row items-center space-x-2">
+            <TouchableOpacity
+              onPress={handleCancel}
+              className="p-2 rounded-full bg-gray-100"
+              activeOpacity={0.7}
+              disabled={isUpdating}
+            >
+              <Ionicons name="close" size={16} color="#6B7280" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSave}
+              className="p-2 rounded-full bg-blue-500"
+              activeOpacity={0.7}
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons name="checkmark" size={16} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Edit Content Based on Card Type */}
+        {card.image_cid ? (
+          // Image cards: Edit description only
+          <View>
+            <Image
+              source={{ uri: `https://idealite.xyz/${card.image_cid}` }}
+              className="w-full h-48 rounded-lg mb-3"
+              resizeMode="cover"
+            />
+            <Text className="text-sm font-medium text-gray-700 mb-2">
+              Description
+            </Text>
+            <TextInput
+              value={editedDescription}
+              onChangeText={setEditedDescription}
+              placeholder="Enter description..."
+              multiline
+              className="border border-gray-300 rounded-lg p-3 text-gray-900 min-h-[80px]"
+              style={{ textAlignVertical: "top" }}
+              editable={!isUpdating}
+            />
+          </View>
+        ) : card.card_type === "qa" ? (
+          // Q&A cards: Edit question and answer separately
+          <View className="space-y-4">
+            <View>
+              <Text className="text-sm font-medium text-gray-700 mb-2">
+                Question
+              </Text>
+              <TextInput
+                value={editedQuestion}
+                onChangeText={setEditedQuestion}
+                placeholder="Enter question..."
+                multiline
+                className="border border-gray-300 rounded-lg p-3 text-gray-900 min-h-[60px]"
+                style={{ textAlignVertical: "top" }}
+                editable={!isUpdating}
+              />
+            </View>
+            <View>
+              <Text className="text-sm font-medium text-gray-700 mb-2">
+                Answer
+              </Text>
+              <TextInput
+                value={editedAnswer}
+                onChangeText={setEditedAnswer}
+                placeholder="Enter answer..."
+                multiline
+                className="border border-gray-300 rounded-lg p-3 text-gray-900 min-h-[60px]"
+                style={{ textAlignVertical: "top" }}
+                editable={!isUpdating}
+              />
+            </View>
+          </View>
+        ) : (
+          // Other cards: Edit content
+          <View>
+            <Text className="text-sm font-medium text-gray-700 mb-2">
+              Content
+            </Text>
+            <TextInput
+              value={editedContent}
+              onChangeText={setEditedContent}
+              placeholder="Enter content..."
+              multiline
+              className="border border-gray-300 rounded-lg p-3 text-gray-900 min-h-[100px]"
+              style={{ textAlignVertical: "top" }}
+              editable={!isUpdating}
+            />
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // View mode (existing content with edit button added)
   return (
     <View className="bg-white rounded-xl p-4 mb-3 border border-gray-200 shadow-sm">
       {/* Header */}
@@ -97,32 +245,6 @@ const FlashcardItem: React.FC<{
               {card.status}
             </Text>
           </View>
-          {/* Delete button */}
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert(
-                "Delete Card",
-                "Are you sure you want to delete this flashcard?",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: () => onDelete(card.id),
-                  },
-                ]
-              );
-            }}
-            disabled={isDeleting}
-            className="p-1 rounded-full"
-            activeOpacity={0.7}
-          >
-            {isDeleting ? (
-              <ActivityIndicator size="small" color="#EF4444" />
-            ) : (
-              <Ionicons name="trash-outline" size={16} color="#EF4444" />
-            )}
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -198,23 +320,69 @@ const FlashcardItem: React.FC<{
         )
       )}
 
-      {/* Footer with timestamps */}
+      {/* Footer with timestamps and action buttons */}
       <View className="mt-3 pt-3 border-t border-gray-100">
-        <Text className="text-xs text-gray-500">
-          Created: {new Date(card.created_at).toLocaleDateString()}
-          {card.last_reviewed && (
-            <>
-              {" • "}
-              Last reviewed: {new Date(card.last_reviewed).toLocaleDateString()}
-            </>
-          )}
-          {card.next_review && (
-            <>
-              {" • "}
-              Next review: {new Date(card.next_review).toLocaleDateString()}
-            </>
-          )}
-        </Text>
+        <View className="flex-row items-center justify-between">
+          {/* Timestamps on the left */}
+          <View className="flex-1">
+            <Text className="text-xs text-gray-500">
+              Created: {new Date(card.created_at).toLocaleDateString()}
+              {card.last_reviewed && (
+                <>
+                  {" • "}
+                  Last reviewed:{" "}
+                  {new Date(card.last_reviewed).toLocaleDateString()}
+                </>
+              )}
+              {card.next_review && (
+                <>
+                  {" • "}
+                  Next review: {new Date(card.next_review).toLocaleDateString()}
+                </>
+              )}
+            </Text>
+          </View>
+
+          {/* Action buttons on the right */}
+          <View className="flex-row items-center ml-3">
+            {/* Edit button */}
+            <TouchableOpacity
+              onPress={() => setIsEditing(true)}
+              className="p-2 rounded-full mr-1"
+              activeOpacity={0.7}
+              disabled={isDeleting || isUpdating}
+            >
+              <Ionicons name="pencil-outline" size={16} color="#3B82F6" />
+            </TouchableOpacity>
+
+            {/* Delete button */}
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  "Delete Card",
+                  "Are you sure you want to delete this flashcard?",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: () => onDelete(card.id),
+                    },
+                  ]
+                );
+              }}
+              disabled={isDeleting || isUpdating}
+              className="p-2 rounded-full"
+              activeOpacity={0.7}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#EF4444" />
+              ) : (
+                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -230,8 +398,9 @@ export function FlashcardsModal({
   const snapPoints = useMemo(() => ["50%", "75%", "95%"], []);
   const apiClient = useApiClient();
 
-  // State for tracking deletions
+  // State for tracking deletions and updates
   const [deletingCards, setDeletingCards] = useState<Set<string>>(new Set());
+  const [updatingCards, setUpdatingCards] = useState<Set<string>>(new Set());
 
   const { page, isLoading, error, refetch } = usePage(pageId || "");
 
@@ -243,8 +412,9 @@ export function FlashcardsModal({
       sheetRef.current?.snapToIndex(0);
     } else {
       sheetRef.current?.close();
-      // Clear deleting state when modal closes
+      // Clear deleting and updating state when modal closes
       setDeletingCards(new Set());
+      setUpdatingCards(new Set());
     }
   }, [visible]);
 
@@ -284,6 +454,49 @@ export function FlashcardsModal({
     } finally {
       // Remove from deleting set
       setDeletingCards((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+    }
+  };
+
+  // Update handler
+  const handleUpdateCard = async (cardId: string, updates: any) => {
+    try {
+      // Add to updating set
+      setUpdatingCards((prev) => new Set(prev).add(cardId));
+
+      // Call update API
+      await apiClient.patch("/api/v1/cards/update", {
+        id: cardId,
+        ...updates,
+      });
+
+      // Refresh the page data to update the flashcards list
+      await refetch();
+
+      // Show success message
+      Alert.alert("Success", "Card updated successfully");
+    } catch (error) {
+      console.error("Error updating card:", error);
+
+      Sentry.captureException(error, {
+        tags: {
+          component: "FlashcardsModal",
+          action: "update_card",
+        },
+        extra: {
+          cardId,
+          pageId,
+          updates,
+        },
+      });
+
+      Alert.alert("Error", "Failed to update card. Please try again.");
+    } finally {
+      // Remove from updating set
+      setUpdatingCards((prev) => {
         const next = new Set(prev);
         next.delete(cardId);
         return next;
@@ -423,7 +636,9 @@ export function FlashcardsModal({
                     key={card.id}
                     card={card}
                     onDelete={handleDeleteCard}
+                    onUpdate={handleUpdateCard}
                     isDeleting={deletingCards.has(card.id)}
+                    isUpdating={updatingCards.has(card.id)}
                   />
                 ))}
             </View>
