@@ -28,6 +28,32 @@ export interface Resource {
   updated_at: Date | null;
 }
 
+// ADDED_START
+// Flashcard interface matching the database schema
+export interface Flashcard {
+  id: string;
+  user_id: string;
+  page_id: string | null;
+  resource_id: string | null;
+  card_type: "qa" | "image" | "cloze" | null;
+  question: string | null;
+  answer: string | null;
+  cloze_template: string | null;
+  cloze_answers: string | null;
+  content: string | null;
+  image_cid: string | null;
+  description: string | null;
+  last_reviewed: string | null;
+  next_review: string | null;
+  mastered_at: string | null;
+  status: "active" | "mastered" | "suspended";
+  created_at: string;
+  updated_at: string | null;
+  deleted: boolean | null;
+  source_locator: any; // JSON field as returned by the API
+}
+// ADDED_END
+
 // Enhanced PageData interface
 interface PageData {
   // Basic page data
@@ -42,6 +68,7 @@ interface PageData {
   // Enhanced data
   tags: Tag[];
   resources: Resource[];
+  flashcards: Flashcard[];
   userTagTree: TreeTag[];
 }
 
@@ -99,6 +126,7 @@ export const usePage = (pageId: string) => {
             // Preserve enhanced data (tags, resources, userTagTree remain unchanged)
             tags: oldData.tags,
             resources: oldData.resources,
+            flashcards: oldData.flashcards,
             userTagTree: oldData.userTagTree,
           };
         }
