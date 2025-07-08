@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRenameFolder } from "../hooks/folder/useRenameFolder";
 import { useArchiveTag } from "../hooks/useArchiveTag";
 import { useCreateFolder } from "../hooks/useCreateFolder";
 import { useCreatePage } from "../hooks/useCreatePage";
@@ -83,6 +84,11 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   // Add the delete page mutation
   const deletePageMutation = useDeletePage();
 
+  // Add rename folder state and mutation
+  const [showRenameInput, setShowRenameInput] = useState(false);
+  const [renameFolderName, setRenameFolderName] = useState("");
+  const renameFolderMutation = useRenameFolder();
+
   // Animation refs
   const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -139,7 +145,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
     // Show create actions based on item type
     if (selectedItem?.type === "tag") {
-      if (!showFolderInput && !showTagInput) {
+      if (!showFolderInput && !showTagInput && !showRenameInput) {
         baseActions.push(
           {
             key: "create-tag",
@@ -164,8 +170,13 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
         );
       }
     } else if (selectedItem?.type === "folder") {
-      if (!showFolderInput && !showTagInput) {
+      if (!showFolderInput && !showTagInput && !showRenameInput) {
         baseActions.push(
+          {
+            key: "rename-folder",
+            label: "Rename Folder",
+            icon: "create-outline",
+          },
           {
             key: "create-page",
             label: "Create Page",
@@ -185,7 +196,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
       }
     } else if (selectedItem?.type === "page") {
       // Add move action for pages
-      if (!showFolderInput && !showTagInput) {
+      if (!showFolderInput && !showTagInput && !showRenameInput) {
         baseActions.push({
           key: "move-to",
           label: "Move to",
@@ -195,7 +206,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     }
 
     // Add remaining actions based on type
-    if (!showFolderInput && !showTagInput) {
+    if (!showFolderInput && !showTagInput && !showRenameInput) {
       // Archive is only for tags
       if (selectedItem?.type === "tag") {
         baseActions.push({
@@ -214,7 +225,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     }
 
     return baseActions;
-  }, [selectedItem?.type, showFolderInput, showTagInput]);
+  }, [selectedItem?.type, showFolderInput, showTagInput, showRenameInput]);
 
   const openSheet = (item: {
     id: string;
@@ -223,6 +234,39 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   }) => {
     setSelectedItem(item);
     sheetRef.current?.snapToIndex(2);
+  };
+
+  // Add the rename folder handler
+  const handleRenameFolder = async () => {
+    if (!selectedItem || selectedItem.type !== "folder") return;
+
+    try {
+      if (!renameFolderName.trim()) {
+        Alert.alert("Error", "Folder name cannot be empty");
+        return;
+      }
+
+      if (renameFolderName.trim() === selectedItem.title) {
+        // No change, just close
+        setShowRenameInput(false);
+        setRenameFolderName("");
+        sheetRef.current?.close();
+        return;
+      }
+
+      await renameFolderMutation.mutateAsync({
+        folderId: selectedItem.id,
+        newName: renameFolderName.trim(),
+      });
+
+      Alert.alert("Success", "Folder renamed successfully");
+      setShowRenameInput(false);
+      setRenameFolderName("");
+      sheetRef.current?.close();
+    } catch (error) {
+      console.error("Error renaming folder:", error);
+      Alert.alert("Error", "Failed to rename folder. Please try again.");
+    }
   };
 
   // Add the create page handler
@@ -407,6 +451,13 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
     try {
       switch (actionKey) {
+        case "rename-folder":
+          if (selectedItem.type === "folder") {
+            setRenameFolderName(selectedItem.title);
+            setShowRenameInput(true);
+          }
+          break;
+
         case "create-tag":
           setShowTagInput(true);
           break;
@@ -618,13 +669,15 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     forceSyncPendingUpdates,
   ]);
 
-  // Reset folder input when modal closes or item changes
+  // Reset inputs when modal closes or item changes
   useEffect(() => {
     if (!visible) {
       setShowFolderInput(false);
       setFolderName("");
       setShowTagInput(false);
       setTagName("");
+      setShowRenameInput(false);
+      setRenameFolderName("");
     }
   }, [visible]);
 
@@ -633,6 +686,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     setFolderName("");
     setShowTagInput(false);
     setTagName("");
+    setShowRenameInput(false);
+    setRenameFolderName("");
   }, [selectedItem]);
 
   const handlePagePress = (
@@ -1158,7 +1213,72 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           </Text>
         </View>
 
-        {showFolderInput ? (
+        {showRenameInput ? (
+          // Rename folder input
+          <View style={{ padding: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
+              Rename Folder
+            </Text>
+            <BottomSheetTextInput
+              style={{
+                borderWidth: 1,
+                borderColor: "#D1D5DB",
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 16,
+                marginBottom: 16,
+                backgroundColor: "white",
+              }}
+              placeholder="Enter new folder name"
+              value={renameFolderName}
+              onChangeText={setRenameFolderName}
+              autoFocus
+              selectTextOnFocus
+              onSubmitEditing={handleRenameFolder}
+              returnKeyType="done"
+            />
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#D1D5DB",
+                  alignItems: "center",
+                }}
+                onPress={() => {
+                  setShowRenameInput(false);
+                  setRenameFolderName("");
+                }}
+              >
+                <Text style={{ fontSize: 16, color: "#374151" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#4B5563",
+                  alignItems: "center",
+                  opacity: renameFolderMutation.isPending ? 0.5 : 1,
+                }}
+                onPress={handleRenameFolder}
+                disabled={renameFolderMutation.isPending}
+              >
+                {renameFolderMutation.isPending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text
+                    style={{ fontSize: 16, color: "white", fontWeight: "600" }}
+                  >
+                    Rename
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : showFolderInput ? (
           // Folder creation input
           <View style={{ padding: 16 }}>
             <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
@@ -1308,6 +1428,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                       item.key === "create-folder") ||
                     (createTagMutation.isPending &&
                       item.key === "create-tag") ||
+                    (renameFolderMutation.isPending &&
+                      item.key === "rename-folder") ||
                     (deleteFolderMutation.isPending &&
                       item.key === "delete" &&
                       selectedItem?.type === "folder") ||
@@ -1326,6 +1448,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                   (createFolderMutation.isPending &&
                     item.key === "create-folder") ||
                   (createTagMutation.isPending && item.key === "create-tag") ||
+                  (renameFolderMutation.isPending &&
+                    item.key === "rename-folder") ||
                   (deleteFolderMutation.isPending &&
                     item.key === "delete" &&
                     selectedItem?.type === "folder") ||
@@ -1341,6 +1465,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
                 (createFolderMutation.isPending &&
                   item.key === "create-folder") ||
                 (createTagMutation.isPending && item.key === "create-tag") ||
+                (renameFolderMutation.isPending &&
+                  item.key === "rename-folder") ||
                 (deleteFolderMutation.isPending &&
                   item.key === "delete" &&
                   selectedItem?.type === "folder") ||
