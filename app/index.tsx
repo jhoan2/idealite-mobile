@@ -9,8 +9,8 @@ export default function Index() {
   const { isSignedIn, isLoaded } = useAuth();
   const { user, isLoading, error, isOnboarded, refetch } = useUser();
 
-  // Show loading while Clerk is initializing
-  if (!isLoaded || isLoading) {
+  // Show loading while Clerk is initializing OR while fetching user data
+  if (!isLoaded || (isSignedIn && isLoading)) {
     return <LoadingScreen />;
   }
 
@@ -24,16 +24,16 @@ export default function Index() {
     return <ErrorScreen message={error} onRetry={refetch} />;
   }
 
-  // If user exists but not onboarded, go to onboarding
-  if (user && !isOnboarded) {
+  // Wait for user data to load before making routing decisions
+  if (!user) {
+    return <LoadingScreen />;
+  }
+
+  // Now we can safely check onboarding status
+  if (!isOnboarded) {
     return <Redirect href="/(onboarding)/welcome" />;
   }
 
-  // If user is onboarded, go to tabs
-  if (user && isOnboarded) {
-    return <Redirect href="/(tabs)/home" />;
-  }
-
-  // Fallback loading state
-  return <LoadingScreen />;
+  // User is onboarded, go to tabs
+  return <Redirect href="/(tabs)/home" />;
 }
