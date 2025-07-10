@@ -56,7 +56,7 @@ export default function SimpleCanvasWebView({ pageId }: { pageId: string }) {
           ref={webViewRef}
           style={{ flex: 1 }}
           source={{
-            uri: `${process.env.EXPO_PUBLIC_API_URL}/mobile-canvas?pageId=${pageId}`,
+            uri: `${process.env.EXPO_PUBLIC_API_URL}/mobile/canvas?pageId=${pageId}`,
             headers: {
               Authorization: `Bearer ${authToken}`,
             },
