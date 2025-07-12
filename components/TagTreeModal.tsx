@@ -1,4 +1,4 @@
-// components/TagTreeModal.tsx
+// components/TagTreeModal.tsx - Complete component with header separation
 import { Ionicons } from "@expo/vector-icons";
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -30,6 +30,7 @@ import { useDeletePage } from "../hooks/useDeletePage";
 import { useTagTree } from "../hooks/useTagTree";
 import { TreeFolder, TreePage, TreeTag } from "../lib/api/tagTree";
 import { MoveDestinationModal } from "./MoveDestinationModal";
+import { TagTreeModalHeader } from "./TagTreeModalHeader";
 
 interface TagTreeModalProps {
   visible: boolean;
@@ -1138,31 +1139,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           elevation: 5,
         }}
       >
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            borderBottomWidth: 1,
-            borderColor: "#D1D5DB",
-            paddingHorizontal: 16,
-            paddingVertical: 16,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={{ fontSize: 18, fontWeight: "600", color: "#111827" }}>
-              Workspace
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ padding: 8 }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close" size={24} color="#111827" />
-          </TouchableOpacity>
-        </View>
+        {/* Use the separated header component */}
+        <TagTreeModalHeader onClose={onClose} />
 
         {/* Content */}
         {renderContent()}
