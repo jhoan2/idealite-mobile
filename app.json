@@ -13,6 +13,9 @@
       "bundleIdentifier": "com.jhoang2.idealitemobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "splash": {
