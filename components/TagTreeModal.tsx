@@ -218,11 +218,13 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
       }
 
       // Delete is available for all types
-      baseActions.push({
-        key: "delete",
-        label: "Delete",
-        icon: "trash-outline",
-      });
+      if (selectedItem?.type === "folder" || selectedItem?.type === "page") {
+        baseActions.push({
+          key: "delete",
+          label: "Delete",
+          icon: "trash-outline",
+        });
+      }
     }
 
     return baseActions;
