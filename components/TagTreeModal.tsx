@@ -847,12 +847,6 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
             size={18}
             color="#4B5563"
           />
-          <Ionicons
-            name="pricetags"
-            size={16}
-            color="#4B5563"
-            style={{ marginLeft: 6 }}
-          />
           <Text
             style={{
               marginLeft: 8,
