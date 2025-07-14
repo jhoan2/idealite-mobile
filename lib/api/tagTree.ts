@@ -8,6 +8,7 @@ export interface TreePage {
   primary_tag_id: string | null;
   folder_id: string | null;
   content_type: "page" | "canvas";
+  archived: boolean;
 }
 
 export interface TreeFolder {

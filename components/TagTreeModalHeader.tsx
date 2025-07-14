@@ -6,9 +6,15 @@ import { Text, TouchableOpacity, View } from "react-native";
 
 interface TagTreeModalHeaderProps {
   onClose: () => void;
+  showArchived: boolean;
+  onToggleArchived: () => void;
 }
 
-export function TagTreeModalHeader({ onClose }: TagTreeModalHeaderProps) {
+export function TagTreeModalHeader({
+  onClose,
+  showArchived,
+  onToggleArchived,
+}: TagTreeModalHeaderProps) {
   const router = useRouter();
 
   const handleGlobalTagsPress = () => {
@@ -17,9 +23,7 @@ export function TagTreeModalHeader({ onClose }: TagTreeModalHeaderProps) {
   };
 
   const handleArchivePress = () => {
-    // TODO: Navigate to archive page or show archived items
-    console.log("Archive button pressed");
-    // onClose();
+    onToggleArchived();
   };
 
   return (

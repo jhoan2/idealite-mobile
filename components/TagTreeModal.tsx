@@ -57,6 +57,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     isFolderExpanded,
     hasPendingUpdates,
     forceSyncPendingUpdates,
+    showArchived,
+    toggleShowArchived,
+    filteredTagTree,
   } = useTagTree();
 
   // Archive mutation
@@ -995,7 +998,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
       );
     }
 
-    if (tagTree.length === 0) {
+    if (filteredTagTree.length === 0) {
+      // Changed from tagTree to filteredTagTree
       return (
         <View
           style={{
@@ -1014,7 +1018,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
               textAlign: "center",
             }}
           >
-            No tags found
+            {showArchived ? "No archived items found" : "No tags found"}
           </Text>
           <Text
             style={{
@@ -1024,7 +1028,9 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
               textAlign: "center",
             }}
           >
-            Create your first tag to get started
+            {showArchived
+              ? "Archive some tags or pages to see them here"
+              : "Create your first tag to get started"}
           </Text>
         </View>
       );
@@ -1046,7 +1052,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
           />
         }
       >
-        {tagTree.map((tag) => renderTag(tag))}
+        {filteredTagTree.map((tag) => renderTag(tag))}
       </ScrollView>
     );
   };
@@ -1106,6 +1112,25 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
       return { currentTagId: null, currentFolderId: null };
     };
 
+    function filterFolderTree(
+      folder: TreeFolder,
+      showArchived: boolean
+    ): TreeFolder | null {
+      // filter pages in this folder
+      const pages = folder.pages.filter((p) => p.archived === showArchived);
+
+      // recurse into subFolders
+      const subFolders = folder.subFolders
+        .map((sf) => filterFolderTree(sf, showArchived))
+        .filter((f): f is TreeFolder => !!f);
+
+      // keep this folder if it itself has pages or any subFolder survives
+      if (pages.length || subFolders.length) {
+        return { ...folder, pages, subFolders };
+      }
+      return null;
+    }
+
     return findPageLocation(tagTree);
   };
 
@@ -1136,7 +1161,11 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
         }}
       >
         {/* Use the separated header component */}
-        <TagTreeModalHeader onClose={onClose} />
+        <TagTreeModalHeader
+          onClose={onClose}
+          showArchived={showArchived}
+          onToggleArchived={toggleShowArchived}
+        />
 
         {/* Content */}
         {renderContent()}

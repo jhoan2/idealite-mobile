@@ -1,31 +1,31 @@
-// hooks/useTagTree.ts
 import { useAuth } from "@clerk/clerk-expo";
 import * as Sentry from "@sentry/react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   batchUpdateCollapsedState,
   BatchUpdateRequest,
   fetchTagTree,
   TreeFolder,
+  TreePage,
   TreeTag,
 } from "../lib/api/tagTree";
 
 interface UseTagTreeReturn {
-  // Server state
   tagTree: TreeTag[];
+  filteredTagTree: TreeTag[];
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<any>;
+  showArchived: boolean;
+  toggleShowArchived: () => void;
 
-  // Client state
   toggleTag: (tagId: string) => void;
   toggleFolder: (folderId: string) => void;
   isTagExpanded: (tagId: string) => boolean;
   isFolderExpanded: (folderId: string) => boolean;
 
-  // Sync state
   isUpdating: boolean;
   hasPendingUpdates: boolean;
   forceSyncPendingUpdates: () => void;
@@ -34,13 +34,18 @@ interface UseTagTreeReturn {
 export const useTagTree = (): UseTagTreeReturn => {
   const { getToken } = useAuth();
 
-  // Client state for expanded/collapsed UI
+  // Archive state
+  const [showArchived, setShowArchived] = useState(false);
+  const toggleShowArchived = useCallback(() => {
+    setShowArchived((prev) => !prev);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  // Expanded/collapsed client state
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set()
   );
-
-  // Track pending updates for batching
   const [pendingUpdates, setPendingUpdates] = useState<{
     tags: Map<string, boolean>;
     folders: Map<string, boolean>;
@@ -49,10 +54,9 @@ export const useTagTree = (): UseTagTreeReturn => {
     folders: new Map(),
   });
 
-  // Debounce timer ref (use number for React Native compatibility)
   const debounceRef = useRef<number | null>(null);
 
-  // React Query: Fetch tag tree
+  // React Query: fetch tree
   const {
     data: tagTree = [],
     isLoading,
@@ -61,117 +65,59 @@ export const useTagTree = (): UseTagTreeReturn => {
   } = useQuery({
     queryKey: ["tagTree"],
     queryFn: () => fetchTagTree(getToken),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes (renamed from cacheTime)
-    refetchOnWindowFocus: true, // Sync when app comes to foreground
-    refetchOnReconnect: true, // Sync when network reconnects
-    retry: (failureCount, error) => {
-      // Retry up to 3 times for network errors
-      if (failureCount < 3) {
-        return true;
-      }
-      return false;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: (failureCount) => failureCount < 3,
+    retryDelay: (i) => Math.min(1000 * 2 ** i, 30000),
   });
 
-  // Handle query errors (React Query v5 removed onError from useQuery)
-  useEffect(() => {
-    if (error) {
-      Sentry.captureException(error, {
-        tags: {
-          component: "useTagTree",
-          action: "fetchTagTree",
-        },
-      });
-    }
-  }, [error]);
+  function filterPages(pages: TreePage[], showArchived: boolean): TreePage[] {
+    return pages.filter((page) => page.archived === showArchived);
+  }
 
-  // Initialize expanded state from server data
-  useEffect(() => {
-    if (tagTree.length > 0) {
-      const newExpandedTags = new Set<string>();
-      const newExpandedFolders = new Set<string>();
+  function filterFolders(
+    folders: TreeFolder[],
+    showArchived: boolean
+  ): TreeFolder[] {
+    return folders.map((folder) => ({
+      ...folder,
+      pages: filterPages(folder.pages, showArchived),
+      subFolders: filterFolders(folder.subFolders, showArchived),
+    }));
+  }
 
-      const initializeExpanded = (tags: TreeTag[]) => {
-        tags.forEach((tag) => {
-          // If server says NOT collapsed, add to expanded set
-          if (!tag.is_collapsed) {
-            newExpandedTags.add(tag.id);
-          }
+  function filterTagTree(tags: TreeTag[], showArchived: boolean): TreeTag[] {
+    return tags.map((tag) => ({
+      ...tag,
+      pages: filterPages(tag.pages, showArchived),
+      folders: filterFolders(tag.folders, showArchived),
+      children: filterTagTree(tag.children, showArchived),
+    }));
+  }
 
-          // Process folders
-          if (tag.folders) {
-            tag.folders.forEach((folder) => {
-              if (!folder.is_collapsed) {
-                newExpandedFolders.add(folder.id);
-              }
+  // Update the filteredTagTree calculation in useTagTree:
+  const filteredTagTree = useMemo(() => {
+    return filterTagTree(tagTree, showArchived);
+  }, [tagTree, showArchived]);
 
-              // Handle nested folders recursively
-              const processFolders = (folders: TreeFolder[]) => {
-                folders.forEach((f) => {
-                  if (!f.is_collapsed) {
-                    newExpandedFolders.add(f.id);
-                  }
-                  if (f.subFolders && f.subFolders.length > 0) {
-                    processFolders(f.subFolders);
-                  }
-                });
-              };
-
-              if (folder.subFolders && folder.subFolders.length > 0) {
-                processFolders(folder.subFolders);
-              }
-            });
-          }
-
-          // Process child tags
-          if (tag.children && tag.children.length > 0) {
-            initializeExpanded(tag.children);
-          }
-        });
-      };
-
-      initializeExpanded(tagTree);
-      setExpandedTags(newExpandedTags);
-      setExpandedFolders(newExpandedFolders);
-    }
-  }, [tagTree]);
-
-  // Batch update mutation
+  // ---------------
+  // React Query mutation for batching
   const batchUpdateMutation = useMutation({
     mutationFn: (updates: BatchUpdateRequest) =>
       batchUpdateCollapsedState(updates, getToken),
-    onSuccess: (data) => {
-      // Clear pending updates on success
-      setPendingUpdates({
-        tags: new Map(),
-        folders: new Map(),
-      });
-    },
-    onError: (error) => {
-      Sentry.captureException(error, {
-        tags: {
-          component: "useTagTree",
-          action: "batchUpdate",
-        },
-      });
-    },
+    onSuccess: () => setPendingUpdates({ tags: new Map(), folders: new Map() }),
+    onError: (err) =>
+      Sentry.captureException(err, {
+        tags: { component: "useTagTree", action: "batchUpdate" },
+      }),
   });
 
-  // Debounced batch sync
   const debouncedSync = useCallback(() => {
-    // Clear existing timeout
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-    }
-
-    // Set new timeout
+    if (debounceRef.current != null) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const { tags, folders } = pendingUpdates;
-
-      if (tags.size > 0 || folders.size > 0) {
-        const updates: BatchUpdateRequest = {
+      if (tags.size || folders.size) {
+        batchUpdateMutation.mutate({
           tags: Array.from(tags.entries()).map(([id, isCollapsed]) => ({
             id,
             isCollapsed,
@@ -180,125 +126,61 @@ export const useTagTree = (): UseTagTreeReturn => {
             id,
             isCollapsed,
           })),
-        };
-
-        batchUpdateMutation.mutate(updates);
+        });
       }
-    }, 1000) as number; // Cast to number for React Native
+    }, 1000) as unknown as number;
   }, [pendingUpdates, batchUpdateMutation]);
 
-  // Toggle tag with optimistic update
   const toggleTag = useCallback(
     (tagId: string) => {
-      try {
-        setExpandedTags((prev) => {
-          const newSet = new Set(prev);
-          const isCurrentlyExpanded = newSet.has(tagId);
-
-          // Optimistic UI update
-          if (isCurrentlyExpanded) {
-            newSet.delete(tagId);
-          } else {
-            newSet.add(tagId);
-          }
-
-          // Track for server sync (server expects is_collapsed boolean)
-          setPendingUpdates((current) => ({
-            ...current,
-            tags: new Map(current.tags).set(tagId, isCurrentlyExpanded),
-          }));
-
-          // Trigger debounced sync
-          debouncedSync();
-
-          // Haptic feedback for better UX
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-          return newSet;
-        });
-      } catch (error) {
-        Sentry.captureException(error, {
-          tags: {
-            component: "useTagTree",
-            action: "toggleTag",
-          },
-          extra: { tagId },
-        });
-      }
+      setExpandedTags((prev) => {
+        const newSet = new Set(prev);
+        const wasExpanded = newSet.has(tagId);
+        wasExpanded ? newSet.delete(tagId) : newSet.add(tagId);
+        setPendingUpdates((cur) => ({
+          ...cur,
+          tags: new Map(cur.tags).set(tagId, wasExpanded),
+        }));
+        debouncedSync();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        return newSet;
+      });
     },
     [debouncedSync]
   );
 
-  // Toggle folder with optimistic update
   const toggleFolder = useCallback(
     (folderId: string) => {
-      try {
-        setExpandedFolders((prev) => {
-          const newSet = new Set(prev);
-          const isCurrentlyExpanded = newSet.has(folderId);
-
-          // Optimistic UI update
-          if (isCurrentlyExpanded) {
-            newSet.delete(folderId);
-          } else {
-            newSet.add(folderId);
-          }
-
-          // Track for server sync
-          setPendingUpdates((current) => ({
-            ...current,
-            folders: new Map(current.folders).set(
-              folderId,
-              isCurrentlyExpanded
-            ),
-          }));
-
-          // Trigger debounced sync
-          debouncedSync();
-
-          // Haptic feedback
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-          return newSet;
-        });
-      } catch (error) {
-        Sentry.captureException(error, {
-          tags: {
-            component: "useTagTree",
-            action: "toggleFolder",
-          },
-          extra: { folderId },
-        });
-      }
+      setExpandedFolders((prev) => {
+        const newSet = new Set(prev);
+        const wasExpanded = newSet.has(folderId);
+        wasExpanded ? newSet.delete(folderId) : newSet.add(folderId);
+        setPendingUpdates((cur) => ({
+          ...cur,
+          folders: new Map(cur.folders).set(folderId, wasExpanded),
+        }));
+        debouncedSync();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        return newSet;
+      });
     },
     [debouncedSync]
   );
 
-  // Utility functions
   const isTagExpanded = useCallback(
-    (tagId: string) => {
-      return expandedTags.has(tagId);
-    },
+    (tagId: string) => expandedTags.has(tagId),
     [expandedTags]
   );
-
   const isFolderExpanded = useCallback(
-    (folderId: string) => {
-      return expandedFolders.has(folderId);
-    },
+    (folderId: string) => expandedFolders.has(folderId),
     [expandedFolders]
   );
 
-  // Force sync pending updates (useful for onBlur or app background)
   const forceSyncPendingUpdates = useCallback(() => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-    }
-
+    if (debounceRef.current != null) clearTimeout(debounceRef.current);
     const { tags, folders } = pendingUpdates;
-
-    if (tags.size > 0 || folders.size > 0) {
-      const updates: BatchUpdateRequest = {
+    if (tags.size || folders.size) {
+      batchUpdateMutation.mutate({
         tags: Array.from(tags.entries()).map(([id, isCollapsed]) => ({
           id,
           isCollapsed,
@@ -307,38 +189,58 @@ export const useTagTree = (): UseTagTreeReturn => {
           id,
           isCollapsed,
         })),
-      };
-
-      batchUpdateMutation.mutate(updates);
+      });
     }
   }, [pendingUpdates, batchUpdateMutation]);
 
-  // Cleanup timeout on unmount
+  // cleanup
+  useEffect(
+    () => () => {
+      if (debounceRef.current != null) clearTimeout(debounceRef.current);
+    },
+    []
+  );
+
+  // initialize expanded state from server
   useEffect(() => {
-    return () => {
-      if (debounceRef.current !== null) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
+    if (tagTree.length) {
+      const t = new Set<string>(),
+        f = new Set<string>();
+      const init = (tags: TreeTag[]) =>
+        tags.forEach((tag) => {
+          if (!tag.is_collapsed) t.add(tag.id);
+          tag.folders.forEach((folder) => {
+            if (!folder.is_collapsed) f.add(folder.id);
+            const proc = (subs: TreeFolder[]) =>
+              subs.forEach((sf) => {
+                if (!sf.is_collapsed) f.add(sf.id);
+                proc(sf.subFolders);
+              });
+            proc(folder.subFolders);
+          });
+          init(tag.children);
+        });
+      init(tagTree);
+      setExpandedTags(t);
+      setExpandedFolders(f);
+    }
+  }, [tagTree]);
 
   return {
-    // Server state
     tagTree,
+    filteredTagTree,
     isLoading,
     error,
     refetch,
-
-    // Client state
+    showArchived,
+    toggleShowArchived,
     toggleTag,
     toggleFolder,
     isTagExpanded,
     isFolderExpanded,
-
-    // Sync state
-    isUpdating: batchUpdateMutation.isPending, // Changed from isLoading in v5
+    isUpdating: batchUpdateMutation.isPending,
     hasPendingUpdates:
-      pendingUpdates.tags.size > 0 || pendingUpdates.folders.size > 0,
+      !!pendingUpdates.tags.size || !!pendingUpdates.folders.size,
     forceSyncPendingUpdates,
   };
 };
