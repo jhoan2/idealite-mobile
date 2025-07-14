@@ -1,4 +1,4 @@
-// app/(tabs)/_layout.tsx - Using Expo Router's native tabs
+// app/(tabs)/_layout.tsx - Updated with notification badge
 import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorScreen } from "../../components/ErrorScreen";
 import { HapticTab } from "../../components/HapticTab";
 import { LoadingScreen } from "../../components/LoadingScreen";
+import { NotificationBadge } from "../../components/notifications/NotificationBadge";
 import { useUser } from "../../hooks/useUser";
 
 export default function TabLayout() {
@@ -51,7 +52,7 @@ export default function TabLayout() {
           height: 50 + insets.bottom,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11, // Slightly smaller for 5 tabs
           fontWeight: "500",
         },
         headerShown: false,
@@ -65,7 +66,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
-              size={24}
+              size={22} // Slightly smaller for 5 tabs
               color={color}
             />
           ),
@@ -79,7 +80,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "folder" : "folder-outline"}
-              size={24}
+              size={22}
               color={color}
             />
           ),
@@ -91,11 +92,10 @@ export default function TabLayout() {
         options={{
           title: "Review",
           tabBarIcon: ({ color, focused }) => (
-            <Entypo name="inbox" size={24} color={color} />
+            <Entypo name="inbox" size={22} color={color} />
           ),
         }}
       />
-
       <Tabs.Screen
         name="profile"
         options={{
@@ -103,9 +103,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "person" : "person-outline"}
-              size={24}
+              size={22}
               color={color}
             />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "Notifications",
+          tabBarIcon: ({ color, focused }) => (
+            <NotificationBadge color={color} focused={focused} size={22} />
           ),
         }}
       />
