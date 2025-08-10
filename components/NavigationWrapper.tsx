@@ -1,9 +1,20 @@
 // components/NavigationWrapper.tsx
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import {
+  Bell,
+  BookOpen,
+  ChevronDown,
+  Copy,
+  FileText,
+  Folder,
+  HelpCircle,
+  Home,
+  Menu,
+  Settings,
+  User,
+} from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  Animated,
   Dimensions,
   Modal,
   Pressable,
@@ -11,11 +22,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReanimatedAnimated, {
   Extrapolation,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,33 +51,60 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const workspaceHeight = useSharedValue(0);
   const workspaceRotation = useSharedValue(0);
 
-  const openSidebar = () => setSidebarVisible(true);
-  const closeSidebar = () => setSidebarVisible(false);
+  // Animation values for swipe gesture
+  const translateX = useSharedValue(0);
+  const backdropOpacity = useSharedValue(1);
+
+  const openSidebar = () => {
+    setSidebarVisible(true);
+    translateX.value = 0;
+    backdropOpacity.value = 1;
+  };
+
+  const closeSidebar = () => {
+    setSidebarVisible(false);
+    translateX.value = 0;
+    backdropOpacity.value = 1;
+  };
+
+  // Enhanced close function for animations
+  const animatedCloseSidebar = () => {
+    translateX.value = withSpring(-SIDEBAR_WIDTH, {
+      damping: 20,
+      stiffness: 90,
+    });
+    backdropOpacity.value = withTiming(0, { duration: 200 });
+
+    // Close modal after animation
+    setTimeout(() => {
+      runOnJS(closeSidebar)();
+    }, 250);
+  };
 
   // Regular navigation items
   const navigationItems = [
     {
       id: "home",
       title: "Home",
-      icon: "home-outline" as const,
+      icon: Home,
       route: "/(tabs)/home",
     },
     {
       id: "review",
       title: "Review",
-      icon: "library-outline" as const,
+      icon: BookOpen,
       route: "/(tabs)/review",
     },
     {
       id: "profile",
       title: "Profile",
-      icon: "person-outline" as const,
+      icon: User,
       route: "/(tabs)/profile",
     },
     {
       id: "notifications",
       title: "Notifications",
-      icon: "notifications-outline" as const,
+      icon: Bell,
       route: "/(tabs)/notifications",
     },
   ];
@@ -73,19 +114,19 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     {
       id: "projects",
       title: "Projects",
-      icon: "folder-outline" as const,
+      icon: Folder,
       route: "/(tabs)/workspace/projects",
     },
     {
       id: "documents",
       title: "Documents",
-      icon: "document-outline" as const,
+      icon: FileText,
       route: "/(tabs)/workspace/documents",
     },
     {
       id: "templates",
       title: "Templates",
-      icon: "copy-outline" as const,
+      icon: Copy,
       route: "/(tabs)/workspace/templates",
     },
   ];
@@ -111,6 +152,34 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     });
   };
 
+  // Pan gesture for swipe to close
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      // Only allow swiping left (negative translation)
+      const clampedTranslation = Math.min(0, event.translationX);
+      translateX.value = clampedTranslation;
+
+      // Update backdrop opacity based on swipe progress
+      const progress = Math.abs(clampedTranslation) / SIDEBAR_WIDTH;
+      backdropOpacity.value = Math.max(0.2, 1 - progress * 0.8);
+    })
+    .onEnd((event) => {
+      const shouldClose =
+        event.velocityX < -500 || // Fast swipe left
+        Math.abs(event.translationX) > SIDEBAR_WIDTH * 0.3; // Swiped more than 30% of width
+
+      if (shouldClose) {
+        runOnJS(animatedCloseSidebar)();
+      } else {
+        // Snap back to original position
+        translateX.value = withSpring(0, {
+          damping: 20,
+          stiffness: 90,
+        });
+        backdropOpacity.value = withTiming(1, { duration: 200 });
+      }
+    });
+
   const workspaceAnimatedStyle = useAnimatedStyle(() => {
     return {
       height: workspaceHeight.value,
@@ -126,6 +195,18 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const workspaceIconStyle = useAnimatedStyle(() => {
     return {
       transform: [{ rotate: `${workspaceRotation.value}deg` }],
+    };
+  });
+
+  const sidebarAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: translateX.value }],
+    };
+  });
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: backdropOpacity.value,
     };
   });
 
@@ -145,7 +226,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
           className="p-2 -ml-2"
           activeOpacity={0.7}
         >
-          <Ionicons name="menu-outline" size={24} color="#18181b" />
+          <Menu size={24} color="#18181b" />
         </TouchableOpacity>
 
         {/* App Title/Logo Area */}
@@ -165,160 +246,137 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
         animationType="fade"
         onRequestClose={closeSidebar}
       >
-        {/* Backdrop */}
-        <Pressable className="flex-1 bg-black/50" onPress={closeSidebar}>
-          {/* Sidebar Container */}
-          <Animated.View
-            className="absolute left-0 top-0 bottom-0 bg-white shadow-2xl"
-            style={{
-              width: SIDEBAR_WIDTH,
-              paddingTop: insets.top,
-            }}
-          >
-            {/* Sidebar Header */}
-            <View className="flex-row items-center justify-between p-4 border-b border-border">
-              <Text className="text-foreground text-lg font-semibold">
-                Navigation
-              </Text>
-              <TouchableOpacity
-                onPress={closeSidebar}
-                className="p-2 -mr-2"
-                activeOpacity={0.7}
+        {/* Animated Backdrop */}
+        <ReanimatedAnimated.View
+          style={[
+            { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.5)" },
+            backdropAnimatedStyle,
+          ]}
+        >
+          <Pressable className="flex-1" onPress={closeSidebar}>
+            {/* Gesture Detector wraps the sidebar */}
+            <GestureDetector gesture={panGesture}>
+              <ReanimatedAnimated.View
+                className="absolute left-0 top-0 bottom-0 bg-white shadow-2xl"
+                style={[
+                  {
+                    width: SIDEBAR_WIDTH,
+                    paddingTop: insets.top,
+                  },
+                  sidebarAnimatedStyle,
+                ]}
               >
-                <Ionicons name="close-outline" size={24} color="#18181b" />
-              </TouchableOpacity>
-            </View>
+                {/* Sidebar Header */}
 
-            {/* Navigation Items */}
-            <View className="flex-1 py-4">
-              {/* Regular navigation items */}
-              {navigationItems.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  onPress={() => handleNavigate(item.route)}
-                  className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={item.icon}
-                    size={24}
-                    color="#71717a"
-                    className="mr-4"
-                  />
-                  <Text className="text-foreground text-base font-medium ml-4">
-                    {item.title}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                {/* Navigation Items */}
+                <View className="flex-1 py-4">
+                  {/* Regular navigation items */}
+                  {navigationItems.map((item) => {
+                    const IconComponent = item.icon;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => handleNavigate(item.route)}
+                        className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                        activeOpacity={0.7}
+                      >
+                        <IconComponent size={24} color="#71717a" />
+                        <Text className="text-foreground text-base font-medium ml-4">
+                          {item.title}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
 
-              {/* Collapsible Workspace Section */}
-              <View>
-                {/* Workspace Main Button */}
-                <TouchableOpacity
-                  onPress={toggleWorkspace}
-                  className="flex-row items-center justify-between px-6 py-4 active:bg-gray-100"
-                  activeOpacity={0.7}
-                >
-                  <View className="flex-row items-center">
-                    <Ionicons
-                      name="folder-outline"
-                      size={24}
-                      color="#71717a"
-                      className="mr-4"
-                    />
-                    <Text className="text-foreground text-base font-medium ml-4">
-                      Workspace
-                    </Text>
+                  {/* Collapsible Workspace Section */}
+                  <View>
+                    {/* Workspace Main Button */}
+                    <TouchableOpacity
+                      onPress={toggleWorkspace}
+                      className="flex-row items-center justify-between px-6 py-4 active:bg-gray-100"
+                      activeOpacity={0.7}
+                    >
+                      <View className="flex-row items-center">
+                        <Folder size={24} color="#71717a" />
+                        <Text className="text-foreground text-base font-medium ml-4">
+                          Workspace
+                        </Text>
+                      </View>
+
+                      <ReanimatedAnimated.View style={workspaceIconStyle}>
+                        <ChevronDown size={20} color="#71717a" />
+                      </ReanimatedAnimated.View>
+                    </TouchableOpacity>
+
+                    {/* Collapsible Sub-items */}
+                    <ReanimatedAnimated.View
+                      style={[workspaceAnimatedStyle, { overflow: "hidden" }]}
+                    >
+                      {workspaceItems.map((item) => {
+                        const IconComponent = item.icon;
+                        return (
+                          <TouchableOpacity
+                            key={item.id}
+                            onPress={() => handleNavigate(item.route)}
+                            className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                            activeOpacity={0.7}
+                            style={{ paddingLeft: 48 }} // Extra indent for sub-items
+                          >
+                            <IconComponent size={20} color="#9ca3af" />
+                            <Text className="text-muted-foreground text-sm font-medium ml-3">
+                              {item.title}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ReanimatedAnimated.View>
                   </View>
 
-                  <ReanimatedAnimated.View style={workspaceIconStyle}>
-                    <Ionicons
-                      name="chevron-down-outline"
-                      size={20}
-                      color="#71717a"
-                    />
-                  </ReanimatedAnimated.View>
-                </TouchableOpacity>
+                  {/* Divider */}
+                  <View className="h-px bg-border mx-6 my-4" />
 
-                {/* Collapsible Sub-items */}
-                <ReanimatedAnimated.View
-                  style={[workspaceAnimatedStyle, { overflow: "hidden" }]}
-                >
-                  {workspaceItems.map((item) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      onPress={() => handleNavigate(item.route)}
-                      className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                      activeOpacity={0.7}
-                      style={{ paddingLeft: 48 }} // Extra indent for sub-items
-                    >
-                      <Ionicons
-                        name={item.icon}
-                        size={20}
-                        color="#9ca3af"
-                        className="mr-3"
-                      />
-                      <Text className="text-muted-foreground text-sm font-medium ml-3">
-                        {item.title}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ReanimatedAnimated.View>
-              </View>
+                  {/* Additional Actions */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      closeSidebar();
+                      // Add settings navigation here
+                      console.log("Navigate to settings");
+                    }}
+                    className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                    activeOpacity={0.7}
+                  >
+                    <Settings size={24} color="#71717a" />
+                    <Text className="text-foreground text-base font-medium ml-4">
+                      Settings
+                    </Text>
+                  </TouchableOpacity>
 
-              {/* Divider */}
-              <View className="h-px bg-border mx-6 my-4" />
+                  <TouchableOpacity
+                    onPress={() => {
+                      closeSidebar();
+                      // Add help navigation here
+                      console.log("Navigate to help");
+                    }}
+                    className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                    activeOpacity={0.7}
+                  >
+                    <HelpCircle size={24} color="#71717a" />
+                    <Text className="text-foreground text-base font-medium ml-4">
+                      Help & Support
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
-              {/* Additional Actions */}
-              <TouchableOpacity
-                onPress={() => {
-                  closeSidebar();
-                  // Add settings navigation here
-                  console.log("Navigate to settings");
-                }}
-                className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={24}
-                  color="#71717a"
-                  className="mr-4"
-                />
-                <Text className="text-foreground text-base font-medium ml-4">
-                  Settings
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  closeSidebar();
-                  // Add help navigation here
-                  console.log("Navigate to help");
-                }}
-                className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="help-circle-outline"
-                  size={24}
-                  color="#71717a"
-                  className="mr-4"
-                />
-                <Text className="text-foreground text-base font-medium ml-4">
-                  Help & Support
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Sidebar Footer */}
-            <View className="border-t border-border p-4">
-              <Text className="text-muted-foreground text-sm text-center">
-                Idealite Mobile v1.0.0
-              </Text>
-            </View>
-          </Animated.View>
-        </Pressable>
+                {/* Sidebar Footer */}
+                <View className="border-t border-border p-4">
+                  <Text className="text-muted-foreground text-sm text-center">
+                    Idealite Mobile v1.0.0
+                  </Text>
+                </View>
+              </ReanimatedAnimated.View>
+            </GestureDetector>
+          </Pressable>
+        </ReanimatedAnimated.View>
       </Modal>
     </View>
   );
