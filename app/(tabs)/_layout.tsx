@@ -1,21 +1,15 @@
 // app/(tabs)/_layout.tsx - Updated to use NavigationWrapper
 import { useAuth } from "@clerk/clerk-expo";
-import { Ionicons } from "@expo/vector-icons";
-import Entypo from "@expo/vector-icons/Entypo";
 import * as Sentry from "@sentry/react-native";
-import { Redirect, Tabs } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Redirect, Stack } from "expo-router";
 import { ErrorScreen } from "../../components/ErrorScreen";
-import { HapticTab } from "../../components/HapticTab";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NavigationWrapper } from "../../components/NavigationWrapper";
-import { NotificationBadge } from "../../components/notifications/NotificationBadge";
 import { useUser } from "../../hooks/useUser";
 
 export default function TabLayout() {
   const { isSignedIn, isLoaded } = useAuth();
   const { user, isLoading, error, isOnboarded, refetch } = useUser();
-  const insets = useSafeAreaInsets();
 
   // Loading states
   if (!isLoaded || isLoading) {
@@ -43,85 +37,17 @@ export default function TabLayout() {
   // Wrap the entire tab navigation with NavigationWrapper
   return (
     <NavigationWrapper>
-      <Tabs
+      <Stack
         screenOptions={{
-          tabBarActiveTintColor: "#18181b", // primary color
-          tabBarInactiveTintColor: "#71717a", // muted-foreground
-          tabBarStyle: {
-            backgroundColor: "#ffffff", // background
-            borderTopColor: "#e4e4e7", // border
-            borderTopWidth: 1,
-            paddingBottom: insets.bottom,
-            height: 50 + insets.bottom,
-          },
-          tabBarLabelStyle: {
-            fontSize: 11, // Slightly smaller for 5 tabs
-            fontWeight: "500",
-          },
-          headerShown: false, // Important: Keep this false since NavigationWrapper provides the header
-          tabBarButton: HapticTab, // Add haptic feedback
+          headerShown: false, // Since NavigationWrapper provides the header
         }}
       >
-        <Tabs.Screen
-          name="home"
-          options={{
-            title: "Home",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "home" : "home-outline"}
-                size={22} // Slightly smaller for 5 tabs
-                color={color}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="workspace"
-          options={{
-            title: "Workspace",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "folder" : "folder-outline"}
-                size={22}
-                color={color}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="review"
-          options={{
-            title: "Review",
-            tabBarIcon: ({ color, focused }) => (
-              <Entypo name="inbox" size={22} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: "Profile",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "person" : "person-outline"}
-                size={22}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="notifications"
-          options={{
-            title: "Notifications",
-            tabBarIcon: ({ color, focused }) => (
-              <NotificationBadge color={color} focused={focused} size={22} />
-            ),
-          }}
-        />
-      </Tabs>
+        <Stack.Screen name="home" />
+        <Stack.Screen name="workspace" />
+        <Stack.Screen name="review" />
+        <Stack.Screen name="profile" />
+        <Stack.Screen name="notifications" />
+      </Stack>
     </NavigationWrapper>
   );
 }
