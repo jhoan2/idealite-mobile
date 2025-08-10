@@ -11,6 +11,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import ReanimatedAnimated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface NavigationWrapperProps {
@@ -22,25 +29,24 @@ const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75; // 75% of screen width
 
 export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  // Animation values for workspace collapsible
+  const workspaceHeight = useSharedValue(0);
+  const workspaceRotation = useSharedValue(0);
 
   const openSidebar = () => setSidebarVisible(true);
   const closeSidebar = () => setSidebarVisible(false);
 
-  // Navigation items for the sidebar
+  // Regular navigation items
   const navigationItems = [
     {
       id: "home",
       title: "Home",
       icon: "home-outline" as const,
       route: "/(tabs)/home",
-    },
-    {
-      id: "workspace",
-      title: "Workspace",
-      icon: "folder-outline" as const,
-      route: "/(tabs)/workspace",
     },
     {
       id: "review",
@@ -62,10 +68,66 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     },
   ];
 
+  // Workspace sub-items
+  const workspaceItems = [
+    {
+      id: "projects",
+      title: "Projects",
+      icon: "folder-outline" as const,
+      route: "/(tabs)/workspace/projects",
+    },
+    {
+      id: "documents",
+      title: "Documents",
+      icon: "document-outline" as const,
+      route: "/(tabs)/workspace/documents",
+    },
+    {
+      id: "templates",
+      title: "Templates",
+      icon: "copy-outline" as const,
+      route: "/(tabs)/workspace/templates",
+    },
+  ];
+
   const handleNavigate = (route: string) => {
     closeSidebar();
     router.push(route as any);
   };
+
+  const toggleWorkspace = () => {
+    const newExpanded = !workspaceExpanded;
+    setWorkspaceExpanded(newExpanded);
+
+    // Calculate height for 3 items (each ~56px tall)
+    const targetHeight = newExpanded ? 168 : 0;
+
+    workspaceHeight.value = withTiming(targetHeight, {
+      duration: 300,
+    });
+
+    workspaceRotation.value = withTiming(newExpanded ? 180 : 0, {
+      duration: 300,
+    });
+  };
+
+  const workspaceAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      height: workspaceHeight.value,
+      opacity: interpolate(
+        workspaceHeight.value,
+        [0, 84, 168],
+        [0, 0.5, 1],
+        Extrapolation.CLAMP
+      ),
+    };
+  });
+
+  const workspaceIconStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${workspaceRotation.value}deg` }],
+    };
+  });
 
   return (
     <View className="flex-1 bg-background">
@@ -96,7 +158,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       {/* Main Content Area */}
       <View className="flex-1">{children}</View>
 
-      {/* Right Sidebar Modal */}
+      {/* Left Sidebar Modal */}
       <Modal
         visible={sidebarVisible}
         transparent
@@ -129,6 +191,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
 
             {/* Navigation Items */}
             <View className="flex-1 py-4">
+              {/* Regular navigation items */}
               {navigationItems.map((item) => (
                 <TouchableOpacity
                   key={item.id}
@@ -147,6 +210,61 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                   </Text>
                 </TouchableOpacity>
               ))}
+
+              {/* Collapsible Workspace Section */}
+              <View>
+                {/* Workspace Main Button */}
+                <TouchableOpacity
+                  onPress={toggleWorkspace}
+                  className="flex-row items-center justify-between px-6 py-4 active:bg-gray-100"
+                  activeOpacity={0.7}
+                >
+                  <View className="flex-row items-center">
+                    <Ionicons
+                      name="folder-outline"
+                      size={24}
+                      color="#71717a"
+                      className="mr-4"
+                    />
+                    <Text className="text-foreground text-base font-medium ml-4">
+                      Workspace
+                    </Text>
+                  </View>
+
+                  <ReanimatedAnimated.View style={workspaceIconStyle}>
+                    <Ionicons
+                      name="chevron-down-outline"
+                      size={20}
+                      color="#71717a"
+                    />
+                  </ReanimatedAnimated.View>
+                </TouchableOpacity>
+
+                {/* Collapsible Sub-items */}
+                <ReanimatedAnimated.View
+                  style={[workspaceAnimatedStyle, { overflow: "hidden" }]}
+                >
+                  {workspaceItems.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => handleNavigate(item.route)}
+                      className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                      activeOpacity={0.7}
+                      style={{ paddingLeft: 48 }} // Extra indent for sub-items
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={20}
+                        color="#9ca3af"
+                        className="mr-3"
+                      />
+                      <Text className="text-muted-foreground text-sm font-medium ml-3">
+                        {item.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ReanimatedAnimated.View>
+              </View>
 
               {/* Divider */}
               <View className="h-px bg-border mx-6 my-4" />
