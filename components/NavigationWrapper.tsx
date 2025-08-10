@@ -2,16 +2,13 @@
 import { useRouter } from "expo-router";
 import {
   Bell,
-  BookOpen,
   ChevronDown,
   Copy,
   FileText,
   Folder,
-  HelpCircle,
   Home,
+  Inbox,
   Menu,
-  Settings,
-  User,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
@@ -33,6 +30,7 @@ import ReanimatedAnimated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ProfileHeader } from "./ProfileHeader"; // Import the new component
 
 interface NavigationWrapperProps {
   children: React.ReactNode;
@@ -81,33 +79,12 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     }, 250);
   };
 
-  // Regular navigation items
-  const navigationItems = [
-    {
-      id: "home",
-      title: "Home",
-      icon: Home,
-      route: "/(tabs)/home",
-    },
-    {
-      id: "review",
-      title: "Review",
-      icon: BookOpen,
-      route: "/(tabs)/review",
-    },
-    {
-      id: "profile",
-      title: "Profile",
-      icon: User,
-      route: "/(tabs)/profile",
-    },
-    {
-      id: "notifications",
-      title: "Notifications",
-      icon: Bell,
-      route: "/(tabs)/notifications",
-    },
-  ];
+  // Handle settings press from ProfileHeader
+  const handleSettingsPress = () => {
+    closeSidebar();
+    router.push("/(tabs)/settings" as any);
+    // Or navigate to your settings screen
+  };
 
   // Workspace sub-items
   const workspaceItems = [
@@ -266,29 +243,26 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                   sidebarAnimatedStyle,
                 ]}
               >
-                {/* Sidebar Header */}
+                {/* Sidebar Header with ProfileHeader Component */}
+                <View className="border-b border-border">
+                  <ProfileHeader onSettingsPress={handleSettingsPress} />
+                </View>
 
-                {/* Navigation Items */}
+                {/* Navigation Items - Reordered */}
                 <View className="flex-1 py-4">
-                  {/* Regular navigation items */}
-                  {navigationItems.map((item) => {
-                    const IconComponent = item.icon;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        onPress={() => handleNavigate(item.route)}
-                        className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                        activeOpacity={0.7}
-                      >
-                        <IconComponent size={24} color="#71717a" />
-                        <Text className="text-foreground text-base font-medium ml-4">
-                          {item.title}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {/* 1. Home */}
+                  <TouchableOpacity
+                    onPress={() => handleNavigate("/(tabs)/home")}
+                    className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                    activeOpacity={0.7}
+                  >
+                    <Home size={24} color="#71717a" />
+                    <Text className="text-foreground text-base font-medium ml-4">
+                      Home
+                    </Text>
+                  </TouchableOpacity>
 
-                  {/* Collapsible Workspace Section */}
+                  {/* 2. Collapsible Workspace Section */}
                   <View>
                     {/* Workspace Main Button */}
                     <TouchableOpacity
@@ -332,46 +306,29 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                     </ReanimatedAnimated.View>
                   </View>
 
-                  {/* Divider */}
-                  <View className="h-px bg-border mx-6 my-4" />
-
-                  {/* Additional Actions */}
+                  {/* 3. Review */}
                   <TouchableOpacity
-                    onPress={() => {
-                      closeSidebar();
-                      // Add settings navigation here
-                      console.log("Navigate to settings");
-                    }}
+                    onPress={() => handleNavigate("/(tabs)/review")}
                     className="flex-row items-center px-6 py-4 active:bg-gray-100"
                     activeOpacity={0.7}
                   >
-                    <Settings size={24} color="#71717a" />
+                    <Inbox size={24} color="#71717a" />
                     <Text className="text-foreground text-base font-medium ml-4">
-                      Settings
+                      Review
                     </Text>
                   </TouchableOpacity>
 
+                  {/* 4. Notifications */}
                   <TouchableOpacity
-                    onPress={() => {
-                      closeSidebar();
-                      // Add help navigation here
-                      console.log("Navigate to help");
-                    }}
+                    onPress={() => handleNavigate("/(tabs)/notifications")}
                     className="flex-row items-center px-6 py-4 active:bg-gray-100"
                     activeOpacity={0.7}
                   >
-                    <HelpCircle size={24} color="#71717a" />
+                    <Bell size={24} color="#71717a" />
                     <Text className="text-foreground text-base font-medium ml-4">
-                      Help & Support
+                      Notifications
                     </Text>
                   </TouchableOpacity>
-                </View>
-
-                {/* Sidebar Footer */}
-                <View className="border-t border-border p-4">
-                  <Text className="text-muted-foreground text-sm text-center">
-                    Idealite Mobile v1.0.0
-                  </Text>
                 </View>
               </ReanimatedAnimated.View>
             </GestureDetector>
