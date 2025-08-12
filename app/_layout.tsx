@@ -8,13 +8,19 @@ import {
 } from "@react-navigation/native";
 import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { drizzle } from "drizzle-orm/expo-sqlite";
+import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
+import * as SQLite from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ErrorScreen } from "../components/ErrorScreen";
+import { LoadingScreen } from "../components/LoadingScreen";
+import migrations from "../drizzle/migrations";
 import "../global.css";
 
 Sentry.init({
@@ -31,11 +37,30 @@ Sentry.init({
   ],
 });
 
+// Initialize database
+const expo = SQLite.openDatabaseSync("db.db");
+const db = drizzle(expo);
+
 export default Sentry.wrap(function RootLayout() {
+  const { success, error } = useMigrations(db, migrations);
+
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  if (!loaded || !success) {
+    return <LoadingScreen />; // Your existing loading component
+  }
+
+  if (error) {
+    return (
+      <ErrorScreen
+        message={error.message}
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
 
   // Create QueryClient instance
   const [queryClient] = useState(
