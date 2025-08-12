@@ -1,3 +1,4 @@
+// app/_layout.tsx
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -8,20 +9,15 @@ import {
 } from "@react-navigation/native";
 import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { drizzle } from "drizzle-orm/expo-sqlite";
-import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
-import * as SQLite from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ErrorScreen } from "../components/ErrorScreen";
-import { LoadingScreen } from "../components/LoadingScreen";
-import migrations from "../drizzle/migrations";
 import "../global.css";
+import { DatabaseProvider } from "../providers/DatabaseProvider";
 
 Sentry.init({
   dsn: __DEV__
@@ -37,30 +33,11 @@ Sentry.init({
   ],
 });
 
-// Initialize database
-const expo = SQLite.openDatabaseSync("db.db");
-const db = drizzle(expo);
-
 export default Sentry.wrap(function RootLayout() {
-  const { success, error } = useMigrations(db, migrations);
-
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
-
-  if (!loaded || !success) {
-    return <LoadingScreen />; // Your existing loading component
-  }
-
-  if (error) {
-    return (
-      <ErrorScreen
-        message={error.message}
-        onRetry={() => window.location.reload()}
-      />
-    );
-  }
 
   // Create QueryClient instance
   const [queryClient] = useState(
@@ -80,32 +57,39 @@ export default Sentry.wrap(function RootLayout() {
   );
 
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <ClerkProvider tokenCache={tokenCache}>
-            <ThemeProvider
-              value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-            >
-              <Stack>
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="(onboarding)"
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen name="+not-found" />
-              </Stack>
-              <StatusBar style="auto" />
-            </ThemeProvider>
-          </ClerkProvider>
-        </QueryClientProvider>
+        <DatabaseProvider>
+          <QueryClientProvider client={queryClient}>
+            <ClerkProvider tokenCache={tokenCache}>
+              <ThemeProvider
+                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+              >
+                <Stack>
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="(auth)"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="(tabs)"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="(onboarding)"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </ClerkProvider>
+          </QueryClientProvider>
+        </DatabaseProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
