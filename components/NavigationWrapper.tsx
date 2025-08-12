@@ -2,7 +2,7 @@
 import { useRouter } from "expo-router";
 import {
   Bell,
-  ChevronDown,
+  ChevronRight,
   Copy,
   FileText,
   Folder,
@@ -30,7 +30,8 @@ import ReanimatedAnimated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ProfileHeader } from "./ProfileHeader"; // Import the new component
+import { PinnedSection } from "./PinnedSection"; // Import the new component
+import { ProfileHeader } from "./ProfileHeader"; // Import the existing component
 
 interface NavigationWrapperProps {
   children: React.ReactNode;
@@ -124,7 +125,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       duration: 300,
     });
 
-    workspaceRotation.value = withTiming(newExpanded ? 180 : 0, {
+    workspaceRotation.value = withTiming(newExpanded ? 90 : 0, {
       duration: 300,
     });
   };
@@ -278,7 +279,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                       </View>
 
                       <ReanimatedAnimated.View style={workspaceIconStyle}>
-                        <ChevronDown size={20} color="#71717a" />
+                        <ChevronRight size={20} color="#71717a" />
                       </ReanimatedAnimated.View>
                     </TouchableOpacity>
 
@@ -329,6 +330,9 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                       Notifications
                     </Text>
                   </TouchableOpacity>
+
+                  {/* 5. Pinned Section */}
+                  <PinnedSection onItemPress={closeSidebar} />
                 </View>
               </ReanimatedAnimated.View>
             </GestureDetector>
