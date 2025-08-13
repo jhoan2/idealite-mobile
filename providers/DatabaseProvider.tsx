@@ -1,6 +1,7 @@
 // providers/DatabaseProvider.tsx
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
+import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
 import * as SQLite from "expo-sqlite";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { ErrorScreen } from "../components/ErrorScreen";
@@ -32,7 +33,9 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
 
   // Run database migrations
   const { success, error: migrationError } = useMigrations(db, migrations);
-
+  if (__DEV__) {
+    useDrizzleStudio(expo);
+  }
   useEffect(() => {
     if (success) {
       setIsReady(true);
