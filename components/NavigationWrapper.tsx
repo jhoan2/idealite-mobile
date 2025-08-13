@@ -8,6 +8,7 @@ import {
   Folder,
   Home,
   Inbox,
+  Layers,
   Menu,
 } from "lucide-react-native";
 import React, { useState } from "react";
@@ -90,10 +91,10 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   // Workspace sub-items
   const workspaceItems = [
     {
-      id: "projects",
-      title: "Projects",
-      icon: Folder,
-      route: "/(tabs)/workspace/projects",
+      id: "all-pages",
+      title: "All Pages",
+      icon: Layers,
+      route: "/(tabs)/workspace/pages",
     },
     {
       id: "documents",

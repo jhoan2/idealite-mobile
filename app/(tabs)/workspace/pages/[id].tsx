@@ -1,11 +1,11 @@
 import { useLocalSearchParams } from "expo-router";
 import React from "react";
 import { SafeAreaView, StyleSheet } from "react-native";
-import { ErrorScreen } from "../../../components/ErrorScreen";
-import { LoadingScreen } from "../../../components/LoadingScreen";
-import BodyEditor from "../../../components/page/BodyEditor";
-import HeadingEditor from "../../../components/page/HeadingEditor";
-import { usePage } from "../../../hooks/page/usePage";
+import { ErrorScreen } from "../../../../components/ErrorScreen";
+import { LoadingScreen } from "../../../../components/LoadingScreen";
+import BodyEditor from "../../../../components/page/BodyEditor";
+import HeadingEditor from "../../../../components/page/HeadingEditor";
+import { usePage } from "../../../../hooks/page/usePage";
 
 export default function NoteEditorScreen() {
   const { id: pageId } = useLocalSearchParams<{ id: string }>();

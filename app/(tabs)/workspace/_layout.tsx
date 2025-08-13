@@ -104,7 +104,7 @@ export default function WorkspaceLayout() {
     <>
       <Stack
         screenOptions={{
-          headerShown: true,
+          headerShown: false,
           headerStyle: {
             backgroundColor: "#ffffff",
           },
@@ -114,7 +114,6 @@ export default function WorkspaceLayout() {
             fontSize: 18,
           },
           headerShadowVisible: true,
-          headerLeft: () => <HeaderLeft />,
         }}
       >
         <Stack.Screen
