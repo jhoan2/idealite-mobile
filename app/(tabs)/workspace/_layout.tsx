@@ -117,7 +117,7 @@ export default function WorkspaceLayout() {
         }}
       >
         <Stack.Screen
-          name="index"
+          name="pages/index"
           options={{
             title: " ",
           }}
@@ -135,7 +135,7 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
-          name="[id]"
+          name="pages/[id]"
           options={({ route }) => {
             const { id } = route.params as { id: string };
             return {
