@@ -1,8 +1,8 @@
 // components/PageList.tsx
 import { usePages } from "@/hooks/page/usePages";
+import { Edit3 } from "lucide-react-native";
 import React from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
-import { SyncStatus } from "./SyncStatus";
 
 export function PageList() {
   const { pages, isLoading, createPage } = usePages();
@@ -21,8 +21,6 @@ export function PageList() {
 
   return (
     <View className="flex-1">
-      <SyncStatus />
-
       <FlatList
         data={pages}
         keyExtractor={(item) => item.id.toString()}
@@ -35,17 +33,23 @@ export function PageList() {
             </Text>
           </View>
         )}
-        ListFooterComponent={
-          <TouchableOpacity
-            onPress={handleCreatePage}
-            className="p-4 bg-blue-500 rounded-lg m-4"
-          >
-            <Text className="text-white text-center font-medium">
-              Create New Page
-            </Text>
-          </TouchableOpacity>
-        }
+        contentContainerStyle={{ paddingBottom: 80 }} // Add padding to prevent overlap with FAB
       />
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        onPress={handleCreatePage}
+        className="absolute bottom-10 right-6 w-14 h-14 bg-blue-500 rounded-full items-center justify-center shadow-lg"
+        style={{
+          elevation: 8, // Android shadow
+          shadowColor: "#000", // iOS shadow
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+        }}
+      >
+        <Edit3 size={24} color="white" />
+      </TouchableOpacity>
     </View>
   );
 }
