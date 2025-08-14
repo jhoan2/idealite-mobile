@@ -4,6 +4,39 @@ import { Edit3 } from "lucide-react-native";
 import React from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
 
+function getRelativeTime(date: string | Date): string {
+  const now = new Date();
+  const past = new Date(date);
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+  if (diffInSeconds < 60) {
+    return `${diffInSeconds}s`;
+  }
+
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) {
+    return `${diffInMinutes}m`;
+  }
+
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) {
+    return `${diffInHours}h`;
+  }
+
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 30) {
+    return `${diffInDays}d`;
+  }
+
+  const diffInMonths = Math.floor(diffInDays / 30);
+  if (diffInMonths < 12) {
+    return `${diffInMonths}M`;
+  }
+
+  const diffInYears = Math.floor(diffInMonths / 12);
+  return `${diffInYears}y`;
+}
+
 export function PageList() {
   const { pages, isLoading, createPage } = usePages();
 
@@ -27,9 +60,8 @@ export function PageList() {
         renderItem={({ item }) => (
           <View className="p-4 border-b border-gray-200">
             <Text className="font-medium">{item.title}</Text>
-            <Text className="text-xs text-gray-500 mt-1">
-              {item.is_dirty ? "Needs sync" : "Synced"} • Updated:{" "}
-              {new Date(item.updated_at).toLocaleDateString()}
+            <Text className="text-xs text-gray-500 mt-1 pt-2">
+              {getRelativeTime(item.updated_at)}
             </Text>
           </View>
         )}
