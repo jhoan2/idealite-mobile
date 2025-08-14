@@ -39,7 +39,7 @@ export default function HomeScreen() {
   // Unauthenticated state
   if (!isSignedIn) {
     return (
-      <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+      <View className="flex-1 bg-background">
         <View className="flex-1 items-center justify-center p-6">
           <Text className="text-foreground text-2xl font-bold mb-4 text-center">
             Welcome to Idealite
@@ -53,7 +53,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-gray-50">
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -71,16 +71,6 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="p-4">
-          {/* Header */}
-          <View className="mb-6">
-            <Text className="text-foreground text-2xl font-bold mb-2">
-              Dashboard
-            </Text>
-            <Text className="text-muted-foreground">
-              Track your learning progress and activity
-            </Text>
-          </View>
-
           {/* Dashboard Content */}
           {isLoading ? (
             <DashboardLoading />

@@ -157,12 +157,7 @@ export default function NotificationsScreen() {
   // Show error state
   if (error && !isRefetching) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={["top", "bottom"]}>
-        <View className="px-4 py-4 border-b border-border bg-background">
-          <Text className="text-foreground text-xl font-semibold">
-            Notifications
-          </Text>
-        </View>
+      <SafeAreaView className="flex-1 bg-background" edges={["bottom"]}>
         <ErrorScreen
           message={error.message || "Failed to load notifications"}
           onRetry={onRefresh}
@@ -174,14 +169,7 @@ export default function NotificationsScreen() {
   const hasNotifications = notifications.length > 0;
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top", "bottom"]}>
-      {/* Header */}
-      <View className="px-4 py-4 border-b border-border bg-background">
-        <Text className="text-foreground text-xl font-semibold">
-          Notifications
-        </Text>
-      </View>
-
+    <SafeAreaView className="flex-1 bg-background" edges={["bottom"]}>
       {/* Content */}
       {isLoading && !isRefetching ? (
         // Initial loading state

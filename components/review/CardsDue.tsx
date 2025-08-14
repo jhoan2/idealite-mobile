@@ -177,7 +177,7 @@ export default function CardsDue({ tags }: CardsDueProps) {
   }
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: top }}>
+    <View className="flex-1 bg-background">
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
