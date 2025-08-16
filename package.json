@@ -76,7 +76,8 @@
     "tldraw": "^3.13.2",
     "use-debounce": "^10.0.5",
     "uuid": "^11.1.0",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.5",
+    "@shopify/flash-list": "1.7.6"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
