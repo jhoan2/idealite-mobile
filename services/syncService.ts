@@ -1,14 +1,6 @@
 // services/syncService.ts
 import { pageRepository } from "../db/pageRepository";
-import { type Page } from "../db/schema";
-import { captureAndFormatError } from "../lib/sentry/errorHandler";
-
-export interface SyncResult {
-  success: boolean;
-  uploadedPages: number;
-  downloadedPages: number;
-  errors: string[];
-}
+import { type SyncOperation } from "../store/syncStore";
 
 export class SyncService {
   private baseUrl: string;
@@ -19,241 +11,320 @@ export class SyncService {
     this.getAuthToken = getAuthToken;
   }
 
-  // Main sync function - call this to sync everything
-  async syncAll(): Promise<SyncResult> {
-    const result: SyncResult = {
-      success: true,
-      uploadedPages: 0,
-      downloadedPages: 0,
-      errors: [],
-    };
+  // ================================
+  // Push Operations (existing)
+  // ================================
 
-    try {
-      // 1. Push local changes to server
-      const uploadResult = await this.pushToServer();
-      result.uploadedPages = uploadResult.count;
-      result.errors.push(...uploadResult.errors);
-
-      // 2. Pull server changes
-      const downloadResult = await this.pullFromServer();
-      result.downloadedPages = downloadResult.count;
-      result.errors.push(...downloadResult.errors);
-
-      result.success = result.errors.length === 0;
-    } catch (error) {
-      result.success = false;
-      const errorMessage = captureAndFormatError(error, {
-        operation: "sync all",
-        component: "SyncService",
-        level: "error",
-      });
-      result.errors.push(`Sync failed: ${errorMessage}`);
+  async executeOperation(operation: SyncOperation): Promise<void> {
+    switch (operation.operationType) {
+      case "create":
+        await this.createPageOnServer(operation);
+        break;
+      case "update":
+        await this.updatePageOnServer(operation);
+        break;
+      case "delete":
+        await this.deletePageOnServer(operation);
+        break;
     }
-
-    return result;
   }
 
-  // Push dirty pages to server
-  private async pushToServer(): Promise<{ count: number; errors: string[] }> {
+  private async createPageOnServer(operation: SyncOperation): Promise<void> {
+    const token = await this.getAuthToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.baseUrl}/api/v1/sync/pages/push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        creates: [
+          {
+            client_id: operation.localId,
+            ...operation.data,
+          },
+        ],
+        updates: [],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create page: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    // Handle conflicts (server wins)
+    if (result.conflicts && result.conflicts.length > 0) {
+      const conflict = result.conflicts[0];
+      await pageRepository.updateFromServer(
+        operation.localId,
+        conflict.server_page
+      );
+      return;
+    }
+
+    // Success - update local page with server ID
+    if (result.created && result.created.length > 0) {
+      const serverData = result.created[0];
+      await pageRepository.markAsSynced(
+        operation.localId,
+        serverData.server_id
+      );
+    }
+  }
+
+  private async updatePageOnServer(operation: SyncOperation): Promise<void> {
+    const token = await this.getAuthToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.baseUrl}/api/v1/sync/pages/push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        creates: [],
+        updates: [
+          {
+            server_id: operation.serverId,
+            ...operation.data,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update page: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    // Handle conflicts (server wins)
+    if (result.conflicts && result.conflicts.length > 0) {
+      const conflict = result.conflicts[0];
+      await pageRepository.updateFromServer(
+        operation.localId,
+        conflict.server_page
+      );
+      return;
+    }
+
+    // Success
+    if (result.updated && result.updated.length > 0) {
+      await pageRepository.markAsSynced(operation.localId, operation.serverId!);
+    }
+  }
+
+  private async deletePageOnServer(operation: SyncOperation): Promise<void> {
+    // Similar to update, but with deleted: true
+    await this.updatePageOnServer({
+      ...operation,
+      data: { ...operation.data, deleted: true },
+    });
+  }
+
+  // ================================
+  // Pull Operations (new)
+  // ================================
+
+  /**
+   * Pull updates from server and apply to local database
+   * @param sinceTimestamp - Only pull updates since this timestamp
+   * @returns Number of pages updated locally
+   */
+  async pullFromServer(sinceTimestamp?: string): Promise<number> {
+    const token = await this.getAuthToken();
+    if (!token) throw new Error("No auth token");
+
+    // Build URL with since parameter
+    const url = new URL(`${this.baseUrl}/api/v1/sync/pages/pull`);
+    if (sinceTimestamp) {
+      url.searchParams.set("since", sinceTimestamp);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to pull from server: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const { pages: serverPages, server_timestamp } = result;
+
+    let updatedCount = 0;
+
+    // Apply each server page to local database
+    for (const serverPage of serverPages) {
+      try {
+        await this.applyServerPage(serverPage);
+        updatedCount++;
+      } catch (error) {
+        console.error(`Failed to apply server page ${serverPage.id}:`, error);
+        // Continue with other pages even if one fails
+      }
+    }
+
+    return updatedCount;
+  }
+
+  /**
+   * Apply a single server page to local database
+   */
+  private async applyServerPage(serverPage: any): Promise<void> {
+    // Check if we already have this page locally
+    const existingPage = await pageRepository.findByServerId(serverPage.id);
+
+    if (existingPage) {
+      // Update existing page
+      await pageRepository.updateFromServer(existingPage.id, {
+        title: serverPage.title,
+        content: serverPage.content,
+        content_type: serverPage.content_type,
+        updated_at: serverPage.updated_at,
+        deleted: serverPage.deleted,
+      });
+    } else {
+      // Create new page from server
+      await this.createLocalPageFromServer(serverPage);
+    }
+  }
+
+  /**
+   * Create a new local page from server data
+   */
+  private async createLocalPageFromServer(serverPage: any): Promise<void> {
+    const newPageData = {
+      title: serverPage.title,
+      content: serverPage.content,
+      content_type: serverPage.content_type,
+      deleted: serverPage.deleted || false,
+    };
+
+    // Create the page
+    const localPage = await pageRepository.createPage(newPageData);
+
+    // Mark it as synced with the server ID
+    await pageRepository.markAsSynced(localPage.id, serverPage.id);
+  }
+
+  // ================================
+  // Full Sync Operations
+  // ================================
+
+  /**
+   * Perform a complete sync: push local changes, then pull server updates
+   * @param lastSyncTimestamp - Timestamp of last successful sync
+   * @returns Sync result summary
+   */
+  async performFullSync(lastSyncTimestamp?: string): Promise<{
+    pushedOperations: number;
+    pulledPages: number;
+    errors: string[];
+  }> {
     const errors: string[] = [];
-    let count = 0;
+    let pushedOperations = 0;
+    let pulledPages = 0;
 
     try {
+      // Step 1: Push all dirty local pages
       const dirtyPages = await pageRepository.getDirtyPages();
 
       for (const page of dirtyPages) {
         try {
-          if (page.server_id === null) {
-            // New page - POST to server
-            await this.createPageOnServer(page);
-          } else {
-            // Existing page - PUT to server
-            await this.updatePageOnServer(page);
-          }
-          count++;
-        } catch (error) {
-          const errorMessage = captureAndFormatError(error, {
-            operation: "sync individual page",
-            component: "SyncService",
-            context: { pageId: page.id, hasServerId: page.server_id !== null },
-          });
-          errors.push(`Failed to sync page ${page.id}: ${errorMessage}`);
-        }
-      }
-    } catch (error) {
-      const errorMessage = captureAndFormatError(error, {
-        operation: "get dirty pages",
-        component: "SyncService",
-        level: "error",
-      });
-      errors.push(`Failed to get dirty pages: ${errorMessage}`);
-    }
-
-    return { count, errors };
-  }
-
-  // Pull updates from server
-  private async pullFromServer(): Promise<{ count: number; errors: string[] }> {
-    const errors: string[] = [];
-    let count = 0;
-
-    try {
-      const token = await this.getAuthToken();
-      if (!token) throw new Error("No auth token");
-
-      // Get updates since last sync
-      const response = await fetch(`${this.baseUrl}/api/pages/updates`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
-      }
-
-      const serverPages = await response.json();
-
-      for (const serverPage of serverPages) {
-        try {
-          // Find local page by server_id
-          const localPage = await pageRepository.findByServerId(serverPage.id);
-
-          if (localPage) {
-            // Update existing local page
-            await pageRepository.updateFromServer(localPage.id, {
-              title: serverPage.title,
-              content: serverPage.content,
-              content_type: serverPage.content_type,
-              updated_at: serverPage.updated_at,
+          if (!page.server_id) {
+            // New page - create on server
+            await this.executeOperation({
+              id: `sync-${Date.now()}-${Math.random()}`,
+              operationType: "create",
+              localId: page.id,
+              serverId: null,
+              data: {
+                title: page.title,
+                content: page.content,
+                content_type: page.content_type,
+                created_at: page.created_at,
+                updated_at: page.updated_at,
+                deleted: page.deleted,
+              },
+              timestamp: new Date().toISOString(),
+              retryCount: 0,
+            });
+          } else if (page.deleted) {
+            // Deleted page - update on server
+            await this.executeOperation({
+              id: `sync-${Date.now()}-${Math.random()}`,
+              operationType: "delete",
+              localId: page.id,
+              serverId: page.server_id,
+              data: {
+                deleted: true,
+                updated_at: page.updated_at,
+              },
+              timestamp: new Date().toISOString(),
+              retryCount: 0,
             });
           } else {
-            // Create new local page from server data
-            await pageRepository.createPage({
-              title: serverPage.title,
-              content: serverPage.content,
-              content_type: serverPage.content_type || "page",
+            // Modified page - update on server
+            await this.executeOperation({
+              id: `sync-${Date.now()}-${Math.random()}`,
+              operationType: "update",
+              localId: page.id,
+              serverId: page.server_id,
+              data: {
+                title: page.title,
+                content: page.content,
+                updated_at: page.updated_at,
+              },
+              timestamp: new Date().toISOString(),
+              retryCount: 0,
             });
-
-            // Mark as synced immediately
-            const [newPage] = await pageRepository.getActivePages();
-            await pageRepository.markAsSynced(newPage.id, serverPage.id);
           }
-
-          count++;
+          pushedOperations++;
         } catch (error) {
-          const errorMessage = captureAndFormatError(error, {
-            operation: "process server page",
-            component: "SyncService",
-            context: { serverPageId: serverPage.id },
-          });
-          errors.push(
-            `Failed to process server page ${serverPage.id}: ${errorMessage}`
-          );
+          errors.push(`Failed to push page ${page.id}: ${error}`);
         }
       }
+
+      // Step 2: Pull updates from server
+      try {
+        pulledPages = await this.pullFromServer(lastSyncTimestamp);
+      } catch (error) {
+        errors.push(`Failed to pull from server: ${error}`);
+      }
     } catch (error) {
-      const errorMessage = captureAndFormatError(error, {
-        operation: "fetch from server",
-        component: "SyncService",
-        level: "error",
-        context: { endpoint: `${this.baseUrl}/api/pages/updates` },
-      });
-      errors.push(`Failed to fetch from server: ${errorMessage}`);
+      errors.push(`Full sync failed: ${error}`);
     }
 
-    return { count, errors };
+    return {
+      pushedOperations,
+      pulledPages,
+      errors,
+    };
   }
 
-  // Create new page on server
-  private async createPageOnServer(page: Page): Promise<void> {
-    try {
-      const token = await this.getAuthToken();
-      if (!token) throw new Error("No auth token");
+  /**
+   * Get the timestamp of the last successful sync
+   */
+  async getLastSyncTimestamp(): Promise<string | null> {
+    // This could be stored in your sync store or a separate settings table
+    // For now, we'll use a simple approach - get the most recent last_synced_at
+    const pages = await pageRepository.getActivePages();
+    const timestamps = pages
+      .map((p) => p.last_synced_at)
+      .filter((t) => t !== null)
+      .sort()
+      .reverse();
 
-      const response = await fetch(`${this.baseUrl}/api/pages`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: page.title,
-          content: page.content,
-          content_type: page.content_type,
-          created_at: page.created_at,
-          updated_at: page.updated_at,
-          deleted: page.deleted,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create page: ${response.status}`);
-      }
-
-      const serverPage = await response.json();
-
-      // Update local page with server ID
-      await pageRepository.markAsSynced(page.id, serverPage.id);
-    } catch (error) {
-      // Re-throw with better context for the caller
-      const errorMessage = captureAndFormatError(error, {
-        operation: "create page on server",
-        component: "SyncService",
-        context: {
-          pageId: page.id,
-          pageTitle: page.title,
-          endpoint: `${this.baseUrl}/api/pages`,
-        },
-      });
-      throw new Error(errorMessage);
-    }
-  }
-
-  // Update existing page on server
-  private async updatePageOnServer(page: Page): Promise<void> {
-    try {
-      const token = await this.getAuthToken();
-      if (!token) throw new Error("No auth token");
-
-      const response = await fetch(
-        `${this.baseUrl}/api/pages/${page.server_id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: page.title,
-            content: page.content,
-            content_type: page.content_type,
-            updated_at: page.updated_at,
-            deleted: page.deleted,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to update page: ${response.status}`);
-      }
-
-      // Mark as synced
-      await pageRepository.markAsSynced(page.id, page.server_id!);
-    } catch (error) {
-      // Re-throw with better context for the caller
-      const errorMessage = captureAndFormatError(error, {
-        operation: "update page on server",
-        component: "SyncService",
-        context: {
-          pageId: page.id,
-          serverId: page.server_id,
-          pageTitle: page.title,
-          endpoint: `${this.baseUrl}/api/pages/${page.server_id}`,
-        },
-      });
-      throw new Error(errorMessage);
-    }
+    return timestamps[0] || null;
   }
 }

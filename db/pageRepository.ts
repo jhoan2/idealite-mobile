@@ -107,7 +107,12 @@ export const pageRepository = {
   // Update from server data (during pull sync)
   updateFromServer: async (
     localId: number,
-    serverData: Partial<Page>
+    serverData: Partial<
+      Pick<
+        Page,
+        "title" | "content" | "content_type" | "updated_at" | "deleted"
+      >
+    >
   ): Promise<Page> => {
     const [page] = await db
       .update(pages)
@@ -136,5 +141,98 @@ export const pageRepository = {
       .limit(1);
 
     return page;
+  },
+
+  // Find page by local ID
+  findById: async (id: number): Promise<Page | undefined> => {
+    const [page] = await db
+      .select()
+      .from(pages)
+      .where(eq(pages.id, id))
+      .limit(1);
+
+    return page;
+  },
+
+  // Get pages that haven't been synced yet
+  getUnsyncedPages: async (): Promise<Page[]> => {
+    return await db.select().from(pages).where(isNull(pages.last_synced_at));
+  },
+
+  // Get recently updated pages (for debugging)
+  getRecentlyUpdated: async (hours: number = 24): Promise<Page[]> => {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - hours);
+
+    return await db
+      .select()
+      .from(pages)
+      .where(
+        and(
+          eq(pages.deleted, false),
+          // Note: SQLite doesn't have built-in date comparison, so we compare as strings
+          // This works because ISO strings are lexicographically ordered
+          eq(pages.updated_at, cutoff.toISOString())
+        )
+      );
+  },
+
+  // Clear all pages (for testing/reset)
+  clearAll: async (): Promise<void> => {
+    await db.delete(pages);
+  },
+
+  // Get sync statistics
+  getSyncStats: async (): Promise<{
+    total: number;
+    dirty: number;
+    synced: number;
+    unsynced: number;
+  }> => {
+    const allPages = await db.select().from(pages);
+
+    const stats = {
+      total: allPages.length,
+      dirty: allPages.filter((p) => p.is_dirty).length,
+      synced: allPages.filter((p) => p.last_synced_at !== null).length,
+      unsynced: allPages.filter((p) => p.last_synced_at === null).length,
+    };
+
+    return stats;
+  },
+
+  // Batch operations for efficiency
+  batchCreatePages: async (
+    pagesData: Array<
+      Omit<
+        NewPage,
+        "id" | "server_id" | "created_at" | "updated_at" | "is_dirty"
+      >
+    >
+  ): Promise<Page[]> => {
+    const now = getCurrentUTCTimestamp();
+    const newPages = pagesData.map((pageData) => ({
+      ...pageData,
+      server_id: null,
+      created_at: now,
+      updated_at: now,
+      is_dirty: true,
+    }));
+
+    return await db.insert(pages).values(newPages).returning();
+  },
+
+  // Search pages by title (for local search)
+  searchByTitle: async (query: string): Promise<Page[]> => {
+    return await db
+      .select()
+      .from(pages)
+      .where(
+        and(
+          eq(pages.deleted, false)
+          // Simple text search - SQLite doesn't have full-text search by default
+          // You might want to add FTS if needed
+        )
+      );
   },
 };

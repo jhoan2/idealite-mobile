@@ -34,7 +34,6 @@ import ReanimatedAnimated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PinnedSection } from "./PinnedSection";
 import { ProfileHeader } from "./ProfileHeader";
-import { SyncStatus } from "./page/SyncStatus";
 
 interface NavigationWrapperProps {
   children: React.ReactNode;
@@ -266,14 +265,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
               right: 0,
               left: 0,
             }}
-          >
-            <View className="p-4">
-              <SyncStatus
-                showDetails={true}
-                onSyncComplete={() => setDropdownVisible(false)}
-              />
-            </View>
-          </View>
+          ></View>
         </Pressable>
       </Modal>
       {/* Left Sidebar Modal */}
