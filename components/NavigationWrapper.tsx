@@ -2,7 +2,6 @@
 import { usePathname, useRouter } from "expo-router";
 import {
   Bell,
-  ChevronDown,
   ChevronRight,
   Copy,
   FileText,
@@ -45,7 +44,6 @@ const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75; // 75% of screen width
 export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
-  const [dropdownVisible, setDropdownVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
@@ -213,27 +211,9 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
 
         {/* App Title/Logo Area */}
         {pathname === "/workspace/pages" ? (
-          <TouchableOpacity
-            onPress={() => setDropdownVisible(true)}
-            className="flex-row items-center"
-          >
-            <Text className="text-foreground text-lg font-semibold">
-              All Pages
-            </Text>
-            {!dropdownVisible ? (
-              <ChevronRight
-                size={16}
-                color="#18181b"
-                style={{ marginLeft: 4 }}
-              />
-            ) : (
-              <ChevronDown
-                size={16}
-                color="#18181b"
-                style={{ marginLeft: 4 }}
-              />
-            )}
-          </TouchableOpacity>
+          <Text className="text-foreground text-lg font-semibold">
+            All Pages
+          </Text>
         ) : (
           <Text className="text-foreground text-lg font-semibold">
             {pathname.replace("/", "").replace(/-/g, " ")}
@@ -247,27 +227,6 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       {/* Main Content Area */}
       <View className="flex-1">{children}</View>
 
-      <Modal
-        visible={dropdownVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDropdownVisible(false)}
-      >
-        <Pressable
-          className="flex-1"
-          onPress={() => setDropdownVisible(false)}
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.2)" }}
-        >
-          <View
-            className="absolute bg-white rounded-lg shadow-lg mx-4"
-            style={{
-              top: insets.top + 60, // Position below header
-              right: 0,
-              left: 0,
-            }}
-          ></View>
-        </Pressable>
-      </Modal>
       {/* Left Sidebar Modal */}
       <Modal
         visible={sidebarVisible}
