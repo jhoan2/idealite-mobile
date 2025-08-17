@@ -2,7 +2,10 @@ import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, TextInput, View } from "react-native";
 import { useDebounce } from "use-debounce";
-import { usePage } from "../../hooks/page/usePage";
+import { pageRepository } from "../../db/pageRepository";
+import { type Page } from "../../db/schema";
+import { captureAndFormatError } from "../../lib/sentry/errorHandler";
+import { useSyncStore } from "../../store/syncStore";
 
 interface HeadingEditorProps {
   pageId: string;
@@ -13,51 +16,128 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
   pageId,
   placeholder = "Loading...",
 }) => {
-  const { page, isLoading, updatePage, isUpdating } = usePage(pageId);
+  const [page, setPage] = useState<Page | null>(null);
   const [title, setTitle] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const lastSavedTitle = useRef<string>("");
 
   // Debounce the title for automatic saving
   const [debouncedTitle] = useDebounce(title, 800);
 
-  // Update local title when page data loads
-  useEffect(() => {
-    if (page?.title) {
-      setTitle(page.title);
-      lastSavedTitle.current = page.title;
-      setHasUnsavedChanges(false);
-    }
-  }, [page?.title]);
+  // Convert pageId to number
+  const pageIdNumber = parseInt(pageId);
 
-  // Save to server
+  // Load page from SQLite
+  useEffect(() => {
+    const loadPage = async () => {
+      try {
+        setIsLoading(true);
+        const localPage = await pageRepository.findById(pageIdNumber);
+
+        if (localPage) {
+          setPage(localPage);
+          setTitle(localPage.title);
+          lastSavedTitle.current = localPage.title;
+          setHasUnsavedChanges(false);
+        } else {
+          // Page should exist since AllPagesScreen creates it before navigation
+          const errorMessage = captureAndFormatError(
+            new Error(`Page not found with ID: ${pageIdNumber}`),
+            {
+              operation: "load page",
+              component: "HeadingEditor",
+              level: "error",
+              context: { pageId, pageIdNumber },
+            }
+          );
+          Alert.alert("Error", errorMessage);
+        }
+      } catch (error) {
+        const errorMessage = captureAndFormatError(error, {
+          operation: "load page from SQLite",
+          component: "HeadingEditor",
+          level: "error",
+          context: { pageId, pageIdNumber },
+        });
+        Alert.alert("Error", errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (pageIdNumber && !isNaN(pageIdNumber)) {
+      loadPage();
+    }
+  }, [pageIdNumber, pageId]);
+
+  // Save to SQLite and queue sync
   const saveTitle = async (newTitle: string) => {
     const trimmed = newTitle.trim();
-    if (!trimmed || trimmed === lastSavedTitle.current) return;
+    if (!trimmed || trimmed === lastSavedTitle.current || !page) return;
 
     try {
-      await updatePage({ title: trimmed });
+      setIsUpdating(true);
+
+      // Save to local SQLite
+      const updatedPage = await pageRepository.updatePage(pageIdNumber, {
+        title: trimmed,
+      });
+
+      // Update local state
+      setPage(updatedPage);
       lastSavedTitle.current = trimmed;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setHasUnsavedChanges(false);
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Could not save title.");
+
+      // Get fresh page data from SQLite before queuing sync
+      const freshPage = await pageRepository.findById(pageIdNumber);
+      if (freshPage) {
+        // Queue sync operation with complete current page state
+        useSyncStore.getState().queueOperation({
+          operationType: "update",
+          localId: pageIdNumber,
+          serverId: freshPage.server_id,
+          data: {
+            title: freshPage.title,
+            updated_at: new Date().toISOString(),
+          },
+        });
+      }
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      const errorMessage = captureAndFormatError(error, {
+        operation: "save page title",
+        component: "HeadingEditor",
+        level: "error",
+        context: {
+          pageId,
+          pageIdNumber,
+          oldTitle: lastSavedTitle.current,
+          newTitle: trimmed,
+          hasServerID: !!page?.server_id,
+        },
+      });
+      Alert.alert("Error", errorMessage);
       setTitle(lastSavedTitle.current);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
-  // whenever the debounced value changes, save it
+  // Save whenever the debounced value changes
   useEffect(() => {
     if (
       debouncedTitle.trim() &&
-      debouncedTitle.trim() !== lastSavedTitle.current
+      debouncedTitle.trim() !== lastSavedTitle.current &&
+      page
     ) {
       saveTitle(debouncedTitle);
     }
-  }, [debouncedTitle]);
+  }, [debouncedTitle, page]);
 
-  // handleTextChange just sets the title
+  // Handle text change
   const handleTextChange = (newTitle: string) => {
     setTitle(newTitle);
     setHasUnsavedChanges(newTitle.trim() !== lastSavedTitle.current);

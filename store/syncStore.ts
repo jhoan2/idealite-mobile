@@ -103,6 +103,32 @@ interface SyncStore {
   _syncService: any; // Will be set by provider
 }
 
+const canMergeOperations = (
+  existing: SyncOperation,
+  incoming: SyncOperation
+): boolean => {
+  // Must be for the same page
+  if (existing.localId !== incoming.localId) return false;
+
+  // Must have compatible operation types
+  if (existing.operationType === "delete") return false; // Never merge with deletes
+  if (incoming.operationType === "delete") return false; // Delete should replace everything
+
+  // create + update = create (with merged data)
+  // update + update = update (with merged data)
+  if (
+    (existing.operationType === "create" &&
+      incoming.operationType === "update") ||
+    (existing.operationType === "update" &&
+      incoming.operationType === "update") ||
+    (existing.operationType === "create" && incoming.operationType === "create")
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 // ================================
 // Store Implementation
 // ================================
@@ -175,11 +201,35 @@ export const useSyncStore = create<SyncStore>()(
         // ================================
         queueOperation: (operation) => {
           set((state) => {
-            // Check if there's already a pending operation for this page
             const existingIndex = state.operationQueue.findIndex(
               (op: SyncOperation) => op.localId === operation.localId
             );
 
+            if (existingIndex !== -1) {
+              const existingOp = state.operationQueue[existingIndex];
+
+              // Only merge if the operations are compatible
+              if (canMergeOperations(existingOp, operation as SyncOperation)) {
+                // Merge the data fields
+                existingOp.data = {
+                  ...existingOp.data,
+                  ...operation.data,
+                };
+
+                // Update timestamp to reflect latest change
+                existingOp.timestamp = new Date().toISOString();
+
+                // Reset retry count since this is new data
+                existingOp.retryCount = 0;
+
+                return; // Early return, don't add new operation
+              } else {
+                // Can't merge - remove old operation and add new one
+                state.operationQueue.splice(existingIndex, 1);
+              }
+            }
+
+            // Add new operation (either no existing one, or couldn't merge)
             const newOperation: SyncOperation = {
               ...operation,
               id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -187,14 +237,8 @@ export const useSyncStore = create<SyncStore>()(
               retryCount: 0,
             };
 
-            if (existingIndex !== -1) {
-              // Replace existing operation (merge edits)
-              state.operationQueue[existingIndex] = newOperation;
-            } else {
-              // Add new operation
-              state.operationQueue.push(newOperation);
-              state.totalOperations += 1;
-            }
+            state.operationQueue.push(newOperation);
+            state.totalOperations += 1;
           });
 
           // Auto-process if enabled and online

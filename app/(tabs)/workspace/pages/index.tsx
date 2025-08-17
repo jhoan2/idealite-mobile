@@ -60,7 +60,13 @@ export default function AllPagesScreen() {
         if (queueLength > 0) {
           // If there are pending operations, just process the queue
           // (which will trigger a pull after push completes)
-          console.log("Processing pending sync operations...");
+          useSyncStore
+            .getState()
+            .processQueue()
+            .then(() => {
+              // Reload pages after sync
+              loadPages();
+            });
         } else {
           // If no pending operations, do a pull to get latest from server
           pullFromServer().then(() => {
@@ -92,15 +98,31 @@ export default function AllPagesScreen() {
     }
   }, [isOnline, performFullSync, loadPages]);
 
-  const createNewPage = () => {
-    const newPageId = Date.now();
-    router.push({
-      pathname: "/workspace/pages/[id]",
-      params: {
-        id: newPageId.toString(),
-        isNew: "true",
-      },
-    });
+  const createNewPage = async () => {
+    try {
+      // Create the page in SQLite first
+      const newPage = await pageRepository.createPage({
+        title: "Untitled Page",
+        content: "<p>Start writing...</p>",
+        content_type: "page",
+        description: null,
+        image_previews: null,
+        deleted: false,
+      });
+
+      // Navigate to the real SQLite ID
+      router.push({
+        pathname: "/workspace/pages/[id]",
+        params: {
+          id: newPage.id.toString(),
+        },
+      });
+
+      // Refresh the list to show the new page
+      loadPages();
+    } catch (error) {
+      Alert.alert("Error", "Failed to create page");
+    }
   };
 
   const openPage = (page: Page) => {
