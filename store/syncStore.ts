@@ -326,18 +326,17 @@ export const useSyncStore = create<SyncStore>()(
 
           try {
             const lastSync = get().lastSyncTimestamp;
-            const pulledCount = await _syncService.pullFromServer(
+            const result = await _syncService.pullFromServer(
               lastSync || undefined
             );
 
             set((state) => {
               state.lastSyncAt = new Date().toISOString();
-              state.lastSyncTimestamp = new Date().toISOString();
+              state.lastSyncTimestamp =
+                result.server_timestamp || new Date().toISOString();
               state.status = "idle";
               state.pullInProgress = false;
             });
-
-            console.log(`Pulled ${pulledCount} pages from server`);
           } catch (error) {
             set((state) => {
               state.status = "error";
@@ -371,7 +370,8 @@ export const useSyncStore = create<SyncStore>()(
 
             set((state) => {
               state.lastSyncAt = new Date().toISOString();
-              state.lastSyncTimestamp = new Date().toISOString();
+              state.lastSyncTimestamp =
+                result.server_timestamp || new Date().toISOString();
               state.status = "idle";
               state.successfulOperations += result.pushedOperations;
             });

@@ -134,9 +134,13 @@ export class SyncService {
   /**
    * Pull updates from server and apply to local database
    * @param sinceTimestamp - Only pull updates since this timestamp
-   * @returns Number of pages updated locally
+   * @returns Sync result with count and server timestamp
    */
-  async pullFromServer(sinceTimestamp?: string): Promise<number> {
+  async pullFromServer(sinceTimestamp?: string): Promise<{
+    pulled_count: number;
+    server_timestamp: string;
+    pages: any[];
+  }> {
     const token = await this.getAuthToken();
     if (!token) throw new Error("No auth token");
 
@@ -174,7 +178,12 @@ export class SyncService {
       }
     }
 
-    return updatedCount;
+    // ✅ Return the full result object instead of just the count
+    return {
+      pulled_count: updatedCount,
+      server_timestamp: server_timestamp,
+      pages: serverPages,
+    };
   }
 
   /**
@@ -237,11 +246,13 @@ export class SyncService {
   async performFullSync(lastSyncTimestamp?: string): Promise<{
     pushedOperations: number;
     pulledPages: number;
+    server_timestamp?: string;
     errors: string[];
   }> {
     const errors: string[] = [];
     let pushedOperations = 0;
     let pulledPages = 0;
+    let server_timestamp: string | undefined;
 
     try {
       // Step 1: Push all dirty local pages
@@ -305,7 +316,9 @@ export class SyncService {
 
       // Step 2: Pull updates from server
       try {
-        pulledPages = await this.pullFromServer(lastSyncTimestamp);
+        const pullResult = await this.pullFromServer(lastSyncTimestamp);
+        pulledPages = pullResult.pulled_count;
+        server_timestamp = pullResult.server_timestamp;
       } catch (error) {
         errors.push(`Failed to pull from server: ${error}`);
       }
@@ -316,6 +329,7 @@ export class SyncService {
     return {
       pushedOperations,
       pulledPages,
+      server_timestamp,
       errors,
     };
   }
