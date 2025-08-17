@@ -26,7 +26,7 @@ function ImagePreview({ imageUrl, isOnline }: ImagePreviewProps) {
   }
 
   return (
-    <View className="w-12 h-12 bg-gray-100 rounded border overflow-hidden">
+    <View className="w-20 h-20 bg-gray-100 rounded border overflow-hidden">
       <Image
         source={{ uri: imageUrl }}
         style={{ width: "100%", height: "100%" }}
