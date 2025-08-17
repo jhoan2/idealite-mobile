@@ -192,6 +192,10 @@ export class SyncService {
         content_type: serverPage.content_type,
         updated_at: serverPage.updated_at,
         deleted: serverPage.deleted,
+        description: serverPage.description,
+        image_previews: serverPage.image_previews
+          ? JSON.stringify(serverPage.image_previews)
+          : null,
       });
     } else {
       // Create new page from server
@@ -208,6 +212,10 @@ export class SyncService {
       content: serverPage.content,
       content_type: serverPage.content_type,
       deleted: serverPage.deleted || false,
+      description: serverPage.description,
+      image_previews: serverPage.image_previews
+        ? JSON.stringify(serverPage.image_previews)
+        : null,
     };
 
     // Create the page

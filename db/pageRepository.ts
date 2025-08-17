@@ -1,4 +1,4 @@
-// db/pageRepository.ts
+// db/pageRepository.ts - Simple update to include new fields
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../providers/DatabaseProvider";
 import {
@@ -50,10 +50,15 @@ export const pageRepository = {
     return page;
   },
 
-  // Update existing page
+  // Update existing page - UPDATED to include description and image_previews
   updatePage: async (
     id: number,
-    updates: Partial<Pick<Page, "title" | "content" | "content_type">>
+    updates: Partial<
+      Pick<
+        Page,
+        "title" | "content" | "content_type" | "description" | "image_previews"
+      >
+    >
   ): Promise<Page> => {
     const now = getCurrentUTCTimestamp();
 
@@ -104,13 +109,19 @@ export const pageRepository = {
     return page;
   },
 
-  // Update from server data (during pull sync)
+  // Update from server data (during pull sync) - UPDATED to include description and image_previews
   updateFromServer: async (
     localId: number,
     serverData: Partial<
       Pick<
         Page,
-        "title" | "content" | "content_type" | "updated_at" | "deleted"
+        | "title"
+        | "content"
+        | "content_type"
+        | "description"
+        | "image_previews"
+        | "updated_at"
+        | "deleted"
       >
     >
   ): Promise<Page> => {

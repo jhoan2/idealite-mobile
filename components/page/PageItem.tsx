@@ -1,7 +1,8 @@
-// components/PageItem.tsx
+// components/page/PageItem.tsx - Updated to use separate ImagePreviews component
 import { Clock } from "lucide-react-native";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { ImagePreviews } from "./ImagePreviews";
 
 function getRelativeTime(date: string | Date): string {
   const now = new Date();
@@ -36,12 +37,14 @@ function getRelativeTime(date: string | Date): string {
   return `${diffInYears}y`;
 }
 
-// Page interface - you might want to move this to a types file later
+// Updated Page interface with new fields
 export interface Page {
   id: number;
   server_id?: string | null;
   title: string;
   content: string | null;
+  description: string | null; // NEW
+  image_previews: string | null; // NEW - JSON string
   created_at: string;
   updated_at: string;
   last_synced_at?: string | null;
@@ -54,13 +57,18 @@ export interface PageItemProps {
 }
 
 export function PageItem({ item, onPress }: PageItemProps) {
+  // Parse image previews from JSON string
+  const imagePreviews = item.image_previews
+    ? JSON.parse(item.image_previews)
+    : [];
+
   return (
     <TouchableOpacity
       onPress={() => onPress(item)}
       className="bg-white mx-4 mb-3 p-4 rounded-lg border border-gray-200 active:bg-gray-50"
       activeOpacity={0.7}
     >
-      {/* Header with title and status */}
+      {/* Header with title */}
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-1 mr-3">
           <Text
@@ -69,8 +77,18 @@ export function PageItem({ item, onPress }: PageItemProps) {
           >
             {item.title || "Untitled Page"}
           </Text>
+
+          {/* Description text */}
+          {item.description && (
+            <Text className="text-gray-600 text-sm mt-1" numberOfLines={2}>
+              {item.description}
+            </Text>
+          )}
         </View>
       </View>
+
+      {/* Image previews - now using separate component */}
+      <ImagePreviews imagePreviews={imagePreviews} maxPreviews={3} />
 
       {/* Footer with timestamps */}
       <View className="flex-row items-center justify-between">
