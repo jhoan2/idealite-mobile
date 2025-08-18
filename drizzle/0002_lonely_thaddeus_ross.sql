@@ -1,0 +1,1 @@
+ALTER TABLE `pages` ADD `canvas_image_cid` text;
