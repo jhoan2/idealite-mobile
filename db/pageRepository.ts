@@ -1,5 +1,5 @@
-// db/pageRepository.ts - Simple update to include new fields
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+// db/pageRepository.ts - Updated with search functionality
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "../providers/DatabaseProvider";
 import {
   getCurrentUTCTimestamp,
@@ -155,6 +155,7 @@ export const pageRepository = {
       return await baseQuery;
     }
   },
+
   getActivePagesCount: async (): Promise<number> => {
     const result = await db
       .select({ count: pages.id })
@@ -163,6 +164,42 @@ export const pageRepository = {
 
     return result.length;
   },
+
+  // NEW: Search pages by title and content (case-insensitive)
+  searchPages: async (query: string, limit?: number): Promise<Page[]> => {
+    if (query.length < 3) {
+      return [];
+    }
+
+    // Create case-insensitive search pattern
+    const searchPattern = `%${query.toLowerCase()}%`;
+
+    const searchResults = await db
+      .select()
+      .from(pages)
+      .where(
+        and(
+          eq(pages.deleted, false), // Exclude deleted pages
+          or(
+            // Search in title (case-insensitive)
+            sql`LOWER(${pages.title}) LIKE ${searchPattern}`,
+            // Search in content (case-insensitive, handle null content)
+            sql`LOWER(COALESCE(${pages.content}, '')) LIKE ${searchPattern}`
+          )
+        )
+      )
+      .orderBy(
+        // Prioritize title matches, then by most recent
+        desc(
+          sql`CASE WHEN LOWER(${pages.title}) LIKE ${searchPattern} THEN 1 ELSE 0 END`
+        ),
+        desc(pages.updated_at)
+      )
+      .limit(limit || 50); // Default limit to prevent performance issues
+
+    return searchResults;
+  },
+
   // Find page by server ID
   findByServerId: async (serverId: string): Promise<Page | undefined> => {
     const [page] = await db
@@ -253,17 +290,8 @@ export const pageRepository = {
     return await db.insert(pages).values(newPages).returning();
   },
 
-  // Search pages by title (for local search)
+  // Legacy search method (now uses the new searchPages method)
   searchByTitle: async (query: string): Promise<Page[]> => {
-    return await db
-      .select()
-      .from(pages)
-      .where(
-        and(
-          eq(pages.deleted, false)
-          // Simple text search - SQLite doesn't have full-text search by default
-          // You might want to add FTS if needed
-        )
-      );
+    return await pageRepository.searchPages(query);
   },
 };

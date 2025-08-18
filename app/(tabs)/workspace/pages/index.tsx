@@ -1,17 +1,19 @@
-// app/(tabs)/workspace/pages/index.tsx - Updated with infinite scroll
+// app/(tabs)/workspace/pages/index.tsx - Updated with search functionality
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
-import { FileText, Plus, Wifi, WifiOff } from "lucide-react-native";
+import { FileText, Plus, Search, Wifi, WifiOff, X } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   RefreshControl,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDebouncedCallback } from "use-debounce";
 import { Page, PageItem } from "../../../../components/page/PageItem";
 import { pageRepository } from "../../../../db/pageRepository";
 import {
@@ -35,12 +37,64 @@ export default function AllPagesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasMorePages, setHasMorePages] = useState(true);
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Page[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+
   // Sync store state
   const isOnline = useNetworkStatus();
   const syncStatus = useSyncStatus();
   const queueLength = useQueueLength();
   const lastSyncTimestamp = useLastSyncTimestamp();
   const { performFullSync, pullFromServer } = useSyncStore();
+
+  // Debounced search function
+  const debouncedSearch = useDebouncedCallback(async (query: string) => {
+    if (query.length < 3) {
+      setSearchResults([]);
+      setIsSearchMode(false);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    setIsSearchMode(true);
+
+    try {
+      const results = await pageRepository.searchPages(query, 100);
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Search error:", error);
+      Alert.alert("Search Error", "Failed to search pages");
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, 300);
+
+  // Handle search input change
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+
+    if (text.length === 0) {
+      setSearchResults([]);
+      setIsSearchMode(false);
+      setIsSearching(false);
+      return;
+    }
+
+    debouncedSearch(text);
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setIsSearchMode(false);
+    setIsSearching(false);
+  };
 
   // Load initial pages
   const loadInitialPages = useCallback(async () => {
@@ -61,9 +115,9 @@ export default function AllPagesScreen() {
     }
   }, []);
 
-  // Load more pages for infinite scroll
+  // Load more pages for infinite scroll (only for non-search mode)
   const loadMorePages = useCallback(async () => {
-    if (loadingMore || !hasMorePages) return;
+    if (loadingMore || !hasMorePages || isSearchMode) return;
 
     try {
       setLoadingMore(true);
@@ -85,7 +139,7 @@ export default function AllPagesScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [currentOffset, loadingMore, hasMorePages]);
+  }, [currentOffset, loadingMore, hasMorePages, isSearchMode]);
 
   // Handle pull to refresh
   const onRefresh = useCallback(async () => {
@@ -100,13 +154,19 @@ export default function AllPagesScreen() {
       setCurrentOffset(0);
       setHasMorePages(true);
       await loadInitialPages();
+
+      // If we're in search mode, re-run the search
+      if (isSearchMode && searchQuery.length >= 3) {
+        const results = await pageRepository.searchPages(searchQuery, 100);
+        setSearchResults(results);
+      }
     } catch (error) {
       console.error("Refresh error:", error);
       Alert.alert("Sync Error", "Failed to sync with server");
     } finally {
       setRefreshing(false);
     }
-  }, [isOnline, performFullSync, loadInitialPages]);
+  }, [isOnline, performFullSync, loadInitialPages, isSearchMode, searchQuery]);
 
   // Create new page
   const createNewPage = async () => {
@@ -146,7 +206,7 @@ export default function AllPagesScreen() {
 
   // Footer component for loading more indicator
   const renderFooter = () => {
-    if (!loadingMore) return null;
+    if (!loadingMore || isSearchMode) return null;
 
     return (
       <View className="py-4 items-center">
@@ -159,17 +219,43 @@ export default function AllPagesScreen() {
   };
 
   // Empty state component
-  const EmptyState = () => (
-    <View className="flex-1 justify-center items-center px-8 py-20">
-      <FileText size={64} color="#d1d5db" />
-      <Text className="text-gray-900 text-xl font-semibold mt-4 mb-2">
-        No pages yet
-      </Text>
-      <Text className="text-gray-500 text-center mb-8">
-        Create your first page to get started with Idealite
-      </Text>
-    </View>
-  );
+  const EmptyState = () => {
+    if (isSearchMode) {
+      return (
+        <View className="flex-1 justify-center items-center px-8 py-20">
+          <Search size={64} color="#d1d5db" />
+          <Text className="text-gray-900 text-xl font-semibold mt-4 mb-2">
+            No results found
+          </Text>
+          <Text className="text-gray-500 text-center mb-4">
+            No pages match "{searchQuery}". Try different keywords.
+          </Text>
+          <TouchableOpacity
+            onPress={clearSearch}
+            className="bg-blue-500 px-4 py-2 rounded-lg"
+          >
+            <Text className="text-white font-medium">Clear search</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View className="flex-1 justify-center items-center px-8 py-20">
+        <FileText size={64} color="#d1d5db" />
+        <Text className="text-gray-900 text-xl font-semibold mt-4 mb-2">
+          No pages yet
+        </Text>
+        <Text className="text-gray-500 text-center mb-8">
+          Create your first page to get started with Idealite
+        </Text>
+      </View>
+    );
+  };
+
+  // Determine which data to show
+  const displayData = isSearchMode ? searchResults : pages;
+  const showLoadMore = !isSearchMode && hasMorePages;
 
   // Initial load and sync setup
   useEffect(() => {
@@ -191,7 +277,7 @@ export default function AllPagesScreen() {
   }, [loadInitialPages, isOnline, queueLength, pullFromServer]);
 
   // Loading state for initial load
-  if (loading && pages.length === 0) {
+  if (loading && pages.length === 0 && !isSearchMode) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -202,6 +288,35 @@ export default function AllPagesScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
+      {/* Search Bar */}
+      <View className="bg-white border-b border-gray-200 px-4 py-3">
+        <View className="flex-row items-center bg-gray-100 rounded-lg px-3 py-2">
+          <Search size={20} color="#9ca3af" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            placeholder="Search pages..."
+            placeholderTextColor="#9ca3af"
+            className="flex-1 ml-2 text-gray-900 text-base"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} className="ml-2">
+              <X size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
+          {isSearching && (
+            <ActivityIndicator
+              size="small"
+              color="#3b82f6"
+              style={{ marginLeft: 8 }}
+            />
+          )}
+        </View>
+      </View>
+
       {/* Status Bar */}
       <View className="bg-white border-b border-gray-200 px-4 py-3">
         <View className="flex-row items-center justify-between">
@@ -233,19 +348,28 @@ export default function AllPagesScreen() {
             )}
           </View>
 
-          {queueLength > 0 && (
-            <View className="bg-blue-100 px-2 py-1 rounded-full">
-              <Text className="text-blue-600 text-xs font-medium">
-                {queueLength} pending
+          <View className="flex-row items-center">
+            {isSearchMode && (
+              <Text className="text-blue-600 text-sm mr-4">
+                {searchResults.length} result
+                {searchResults.length !== 1 ? "s" : ""}
               </Text>
-            </View>
-          )}
+            )}
+
+            {queueLength > 0 && (
+              <View className="bg-blue-100 px-2 py-1 rounded-full">
+                <Text className="text-blue-600 text-xs font-medium">
+                  {queueLength} pending
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
-      {/* Pages List with Infinite Scroll */}
+      {/* Pages List */}
       <FlashList
-        data={pages}
+        data={displayData}
         renderItem={renderPageItem}
         keyExtractor={(item) => item.id.toString()}
         estimatedItemSize={120}
@@ -265,9 +389,9 @@ export default function AllPagesScreen() {
         ListFooterComponent={renderFooter}
         showsVerticalScrollIndicator={false}
         disableAutoLayout={false}
-        // Infinite scroll props
-        onEndReached={loadMorePages}
-        onEndReachedThreshold={0.1} // Trigger when 90% scrolled
+        // Only enable infinite scroll for non-search mode
+        onEndReached={showLoadMore ? loadMorePages : undefined}
+        onEndReachedThreshold={showLoadMore ? 0.1 : undefined}
       />
 
       {/* Floating Action Button */}
