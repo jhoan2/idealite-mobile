@@ -41,6 +41,8 @@ export const pageRepository = {
     const newPage: NewPage = {
       ...pageData,
       server_id: null, // No server ID yet
+      description: null, // Explicitly null until server processes
+      image_previews: null, // Explicitly null until server processes
       created_at: now,
       updated_at: now,
       is_dirty: true, // Needs sync
@@ -299,5 +301,199 @@ export const pageRepository = {
   // Legacy search method (now uses the new searchPages method)
   searchByTitle: async (query: string): Promise<Page[]> => {
     return await pageRepository.searchPages(query);
+  },
+  createPageWithUniqueTitle: async (
+    baseTitle: string,
+    pageData: Omit<
+      NewPage,
+      "id" | "server_id" | "created_at" | "updated_at" | "is_dirty" | "title"
+    >
+  ): Promise<Page> => {
+    return await db.transaction(async (tx) => {
+      // Find existing titles within the transaction (this locks the relevant rows)
+      const existingPages = await tx
+        .select({ title: pages.title })
+        .from(pages)
+        .where(
+          and(
+            eq(pages.deleted, false),
+            or(
+              eq(pages.title, baseTitle),
+              sql`${pages.title} LIKE ${baseTitle + " (%"}`
+            )
+          )
+        );
+
+      // Generate unique title based on existing titles
+      let uniqueTitle = baseTitle;
+
+      if (existingPages.length > 0) {
+        const usedNumbers = new Set<number>();
+        let hasExactMatch = false;
+
+        // Analyze existing titles to find used numbers
+        for (const row of existingPages) {
+          if (row.title === baseTitle) {
+            hasExactMatch = true;
+          } else {
+            // Extract number from titles like "Untitled Page (2)"
+            const escapedTitle = baseTitle.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            );
+            const regex = new RegExp(`^${escapedTitle} \\((\\d+)\\)$`);
+            const match = row.title.match(regex);
+            if (match) {
+              const number = parseInt(match[1], 10);
+              if (!isNaN(number)) {
+                usedNumbers.add(number);
+              }
+            }
+          }
+        }
+
+        // Generate the next available number
+        if (hasExactMatch || usedNumbers.size > 0) {
+          let nextNumber = 1;
+
+          // If exact match exists, start from 2
+          if (hasExactMatch) {
+            nextNumber = 2;
+          }
+
+          // Find the next available number
+          while (usedNumbers.has(nextNumber)) {
+            nextNumber++;
+          }
+
+          uniqueTitle = `${baseTitle} (${nextNumber})`;
+        }
+      }
+
+      // Create the page with the unique title within the same transaction
+      const now = getCurrentUTCTimestamp();
+      const newPage: NewPage = {
+        ...pageData,
+        title: uniqueTitle,
+        server_id: null,
+        description: null,
+        image_previews: null,
+        created_at: now,
+        updated_at: now,
+        is_dirty: true,
+      };
+
+      const [page] = await tx.insert(pages).values(newPage).returning();
+      return page;
+    });
+  },
+  updatePageWithUniqueTitle: async (
+    id: number,
+    baseTitle: string,
+    otherUpdates?: Partial<
+      Pick<
+        Page,
+        | "content"
+        | "content_type"
+        | "canvas_image_cid"
+        | "description"
+        | "image_previews"
+      >
+    >
+  ): Promise<Page> => {
+    return await db.transaction(async (tx) => {
+      // Get the current page to make sure we don't conflict with ourselves
+      const currentPage = await tx
+        .select({ id: pages.id, title: pages.title })
+        .from(pages)
+        .where(eq(pages.id, id))
+        .limit(1);
+
+      if (!currentPage[0]) {
+        throw new Error(`Page with id ${id} not found`);
+      }
+
+      // If the title hasn't changed, just do a regular update
+      if (currentPage[0].title === baseTitle.trim()) {
+        const now = getCurrentUTCTimestamp();
+        const [page] = await tx
+          .update(pages)
+          .set({
+            title: baseTitle.trim(),
+            ...otherUpdates,
+            updated_at: now,
+            is_dirty: true,
+          })
+          .where(eq(pages.id, id))
+          .returning();
+        return page;
+      }
+
+      // Find existing titles, excluding the current page
+      const existingPages = await tx
+        .select({ title: pages.title, id: pages.id })
+        .from(pages)
+        .where(
+          and(
+            eq(pages.deleted, false),
+            // Exclude the current page from conflict check
+            sql`${pages.id} != ${id}`,
+            or(
+              eq(pages.title, baseTitle),
+              sql`${pages.title} LIKE ${baseTitle + " (%"}`
+            )
+          )
+        );
+
+      let uniqueTitle = baseTitle;
+
+      if (existingPages.length > 0) {
+        const usedNumbers = new Set<number>();
+        let hasExactMatch = false;
+
+        for (const row of existingPages) {
+          if (row.title === baseTitle) {
+            hasExactMatch = true;
+            console.log("🔍 [UPDATE] Found exact match with page:", row.id);
+          } else {
+            const escapedTitle = baseTitle.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            );
+            const regex = new RegExp(`^${escapedTitle} \\((\\d+)\\)$`);
+            const match = row.title.match(regex);
+            if (match) {
+              const number = parseInt(match[1], 10);
+              if (!isNaN(number)) {
+                usedNumbers.add(number);
+              }
+            }
+          }
+        }
+
+        if (hasExactMatch || usedNumbers.size > 0) {
+          let nextNumber = hasExactMatch ? 2 : 1;
+          while (usedNumbers.has(nextNumber)) {
+            nextNumber++;
+          }
+          uniqueTitle = `${baseTitle} (${nextNumber})`;
+        }
+      }
+
+      // Update the page with the unique title
+      const now = getCurrentUTCTimestamp();
+      const [page] = await tx
+        .update(pages)
+        .set({
+          title: uniqueTitle,
+          ...otherUpdates,
+          updated_at: now,
+          is_dirty: true,
+        })
+        .where(eq(pages.id, id))
+        .returning();
+
+      return page;
+    });
   },
 };

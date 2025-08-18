@@ -171,14 +171,16 @@ export default function AllPagesScreen() {
   // Create new page
   const createNewPage = async () => {
     try {
-      const newPage = await pageRepository.createPage({
-        title: "Untitled Page",
-        content: "<p>Start writing...</p>",
-        content_type: "page",
-        description: null,
-        image_previews: null,
-        deleted: false,
-      });
+      const newPage = await pageRepository.createPageWithUniqueTitle(
+        "Untitled Page",
+        {
+          content: "<p>Start writing...</p>",
+          content_type: "page",
+          description: null,
+          image_previews: null,
+          deleted: false,
+        }
+      );
 
       router.push({
         pathname: "/workspace/pages/[id]",
@@ -188,6 +190,7 @@ export default function AllPagesScreen() {
       // Refresh to show the new page at the top
       await loadInitialPages();
     } catch (error) {
+      console.error("Error creating page:", error);
       Alert.alert("Error", "Failed to create page");
     }
   };
