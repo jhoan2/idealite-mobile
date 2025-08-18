@@ -12,6 +12,7 @@ export const pages = sqliteTable("pages", {
     .default("page"),
   description: text("description"), // Nullable - extracted from content
   image_previews: text("image_previews"), // Nullable - JSON string array of URLs
+  canvas_image_cid: text("canvas_image_cid"),
   created_at: text("created_at").notNull(), // ISO8601 UTC: "2025-08-11T10:30:00.000Z"
   updated_at: text("updated_at").notNull(), // ISO8601 UTC: "2025-08-11T10:30:00.000Z"
   is_dirty: integer("is_dirty", { mode: "boolean" }).notNull().default(false), // Boolean: false=clean, true=needs sync

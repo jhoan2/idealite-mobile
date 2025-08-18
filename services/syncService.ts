@@ -1,4 +1,4 @@
-// services/syncService.ts
+// services/syncService.ts - Updated to handle canvas_image_cid
 import { pageRepository } from "../db/pageRepository";
 import { type SyncOperation } from "../store/syncStore";
 
@@ -12,7 +12,7 @@ export class SyncService {
   }
 
   // ================================
-  // Push Operations (existing)
+  // Push Operations (updated)
   // ================================
 
   async executeOperation(operation: SyncOperation): Promise<void> {
@@ -128,7 +128,7 @@ export class SyncService {
   }
 
   // ================================
-  // Pull Operations (new)
+  // Pull Operations (updated)
   // ================================
 
   /**
@@ -178,7 +178,6 @@ export class SyncService {
       }
     }
 
-    // ✅ Return the full result object instead of just the count
     return {
       pulled_count: updatedCount,
       server_timestamp: server_timestamp,
@@ -187,7 +186,7 @@ export class SyncService {
   }
 
   /**
-   * Apply a single server page to local database
+   * Apply a single server page to local database - UPDATED to handle canvas_image_cid
    */
   private async applyServerPage(serverPage: any): Promise<void> {
     // Check if we already have this page locally
@@ -199,6 +198,7 @@ export class SyncService {
         title: serverPage.title,
         content: serverPage.content,
         content_type: serverPage.content_type,
+        canvas_image_cid: serverPage.canvas_image_cid, // NEW: Include canvas image CID
         updated_at: serverPage.updated_at,
         deleted: serverPage.deleted,
         description: serverPage.description,
@@ -213,13 +213,14 @@ export class SyncService {
   }
 
   /**
-   * Create a new local page from server data
+   * Create a new local page from server data - UPDATED to handle canvas_image_cid
    */
   private async createLocalPageFromServer(serverPage: any): Promise<void> {
     const newPageData = {
       title: serverPage.title,
       content: serverPage.content,
       content_type: serverPage.content_type,
+      canvas_image_cid: serverPage.canvas_image_cid, // NEW: Include canvas image CID
       deleted: serverPage.deleted || false,
       description: serverPage.description,
       image_previews: serverPage.image_previews
@@ -235,7 +236,7 @@ export class SyncService {
   }
 
   // ================================
-  // Full Sync Operations
+  // Full Sync Operations (updated)
   // ================================
 
   /**
@@ -271,9 +272,12 @@ export class SyncService {
                 title: page.title,
                 content: page.content,
                 content_type: page.content_type,
+                canvas_image_cid: page.canvas_image_cid, // NEW: Include canvas image CID
                 created_at: page.created_at,
                 updated_at: page.updated_at,
                 deleted: page.deleted,
+                description: page.description,
+                image_previews: page.image_previews,
               },
               timestamp: new Date().toISOString(),
               retryCount: 0,
@@ -302,6 +306,7 @@ export class SyncService {
               data: {
                 title: page.title,
                 content: page.content,
+                canvas_image_cid: page.canvas_image_cid, // NEW: Include canvas image CID
                 updated_at: page.updated_at,
               },
               timestamp: new Date().toISOString(),

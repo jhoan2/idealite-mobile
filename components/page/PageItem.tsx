@@ -1,7 +1,8 @@
-// components/page/PageItem.tsx - Updated to use separate ImagePreviews component
+// components/page/PageItem.tsx - Updated to handle canvas images
 import { Clock } from "lucide-react-native";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { CanvasPreview } from "./CanvasPreview";
 import { ImagePreviews } from "./ImagePreviews";
 
 function getRelativeTime(date: string | Date): string {
@@ -37,14 +38,16 @@ function getRelativeTime(date: string | Date): string {
   return `${diffInYears}y`;
 }
 
-// Updated Page interface with new fields
+// Updated Page interface with canvas_image_cid
 export interface Page {
   id: number;
   server_id?: string | null;
   title: string;
   content: string | null;
-  description: string | null; // NEW
-  image_previews: string | null; // NEW - JSON string
+  content_type: "page" | "canvas";
+  canvas_image_cid?: string | null; // NEW: Canvas image CID
+  description: string | null;
+  image_previews: string | null; // JSON string
   created_at: string;
   updated_at: string;
   last_synced_at?: string | null;
@@ -87,8 +90,12 @@ export function PageItem({ item, onPress }: PageItemProps) {
         </View>
       </View>
 
-      {/* Image previews - now using separate component */}
-      <ImagePreviews imagePreviews={imagePreviews} maxPreviews={3} />
+      {/* Preview Images - Show canvas preview or regular image previews */}
+      {item.content_type === "canvas" && item.canvas_image_cid ? (
+        <CanvasPreview canvasImageCid={item.canvas_image_cid} />
+      ) : (
+        <ImagePreviews imagePreviews={imagePreviews} maxPreviews={3} />
+      )}
 
       {/* Footer with timestamps */}
       <View className="flex-row items-center justify-between">

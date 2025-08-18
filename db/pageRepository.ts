@@ -56,7 +56,12 @@ export const pageRepository = {
     updates: Partial<
       Pick<
         Page,
-        "title" | "content" | "content_type" | "description" | "image_previews"
+        | "title"
+        | "content"
+        | "content_type"
+        | "canvas_image_cid"
+        | "description"
+        | "image_previews"
       >
     >
   ): Promise<Page> => {
@@ -122,6 +127,7 @@ export const pageRepository = {
         | "image_previews"
         | "updated_at"
         | "deleted"
+        | "canvas_image_cid"
       >
     >
   ): Promise<Page> => {
