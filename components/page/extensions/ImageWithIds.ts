@@ -12,7 +12,7 @@ export const ImageWithIds: BridgeExtension = ImageBridge.extendExtension({
   addOptions() {
     return {
       ...this.parent?.(),
-      inline: true,
+      inline: false,
       allowBase64: true,
       HTMLAttributes: {},
     };
