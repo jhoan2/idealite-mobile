@@ -77,6 +77,18 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
     const trimmed = newTitle.trim();
     if (!trimmed || trimmed === lastSavedTitle.current || !page) return;
 
+    // User-facing validation
+    if (!trimmed) {
+      Alert.alert("Invalid Title", "Page title cannot be empty");
+      setTitle(lastSavedTitle.current); // Reset to last saved
+      return;
+    }
+
+    if (trimmed.length > 200) {
+      Alert.alert("Title Too Long", "Title cannot exceed 200 characters");
+      return;
+    }
+
     try {
       setIsUpdating(true);
 
