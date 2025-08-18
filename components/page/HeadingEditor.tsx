@@ -72,7 +72,7 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
     }
   }, [pageIdNumber, pageId]);
 
-  // Save to SQLite and queue sync
+  // UPDATED: Save to SQLite with unique title handling
   const saveTitle = async (newTitle: string) => {
     const trimmed = newTitle.trim();
     if (!trimmed || trimmed === lastSavedTitle.current || !page) return;
@@ -92,14 +92,16 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
     try {
       setIsUpdating(true);
 
-      // Save to local SQLite
-      const updatedPage = await pageRepository.updatePage(pageIdNumber, {
-        title: trimmed,
-      });
+      // UPDATED: Use the new method that handles unique titles
+      const updatedPage = await pageRepository.updatePageWithUniqueTitle(
+        pageIdNumber,
+        trimmed
+      );
 
-      // Update local state
+      // Update local state with the final title (which might have a number appended)
       setPage(updatedPage);
-      lastSavedTitle.current = trimmed;
+      setTitle(updatedPage.title); // Update the input to show the final title
+      lastSavedTitle.current = updatedPage.title;
       setHasUnsavedChanges(false);
 
       // Get fresh page data from SQLite before queuing sync
