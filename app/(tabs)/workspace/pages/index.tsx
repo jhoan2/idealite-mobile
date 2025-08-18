@@ -1,4 +1,4 @@
-// app/(tabs)/workspace/index.tsx - Updated with extracted PageItem component
+// app/(tabs)/workspace/pages/index.tsx - Updated with infinite scroll
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
 import { FileText, Plus, Wifi, WifiOff } from "lucide-react-native";
@@ -22,85 +22,95 @@ import {
   useSyncStore,
 } from "../../../../store/syncStore";
 
+const PAGES_PER_LOAD = 100; // Number of pages to load at once
+
 export default function AllPagesScreen() {
   const insets = useSafeAreaInsets();
-  const [pages, setPages] = useState<Page[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Sync store state - updated with new methods
+  // Pagination state
+  const [pages, setPages] = useState<Page[]>([]);
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasMorePages, setHasMorePages] = useState(true);
+
+  // Sync store state
   const isOnline = useNetworkStatus();
   const syncStatus = useSyncStatus();
   const queueLength = useQueueLength();
   const lastSyncTimestamp = useLastSyncTimestamp();
   const { performFullSync, pullFromServer } = useSyncStore();
 
-  // Load pages from local database - updated to use real database
-  const loadPages = useCallback(async () => {
+  // Load initial pages
+  const loadInitialPages = useCallback(async () => {
     try {
       setLoading(true);
-      const pagesFromDB = await pageRepository.getActivePages();
+      const pagesFromDB = await pageRepository.getActivePages(
+        PAGES_PER_LOAD,
+        0
+      );
       setPages(pagesFromDB);
+      setCurrentOffset(PAGES_PER_LOAD);
+      setHasMorePages(pagesFromDB.length === PAGES_PER_LOAD);
     } catch (error) {
-      console.error("Error loading pages:", error);
+      console.error("Error loading initial pages:", error);
       Alert.alert("Error", "Failed to load pages");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load and trigger sync - updated with real sync logic
-  useEffect(() => {
-    loadPages();
+  // Load more pages for infinite scroll
+  const loadMorePages = useCallback(async () => {
+    if (loadingMore || !hasMorePages) return;
 
-    // Trigger initial sync if online
-    if (isOnline) {
-      // Use setTimeout to avoid blocking the UI
-      setTimeout(() => {
-        if (queueLength > 0) {
-          // If there are pending operations, just process the queue
-          // (which will trigger a pull after push completes)
-          useSyncStore
-            .getState()
-            .processQueue()
-            .then(() => {
-              // Reload pages after sync
-              loadPages();
-            });
-        } else {
-          // If no pending operations, do a pull to get latest from server
-          pullFromServer().then(() => {
-            // Reload pages after pull
-            loadPages();
-          });
-        }
-      }, 1000);
+    try {
+      setLoadingMore(true);
+      const morePagesFromDB = await pageRepository.getActivePages(
+        PAGES_PER_LOAD,
+        currentOffset
+      );
+
+      if (morePagesFromDB.length > 0) {
+        setPages((prevPages) => [...prevPages, ...morePagesFromDB]);
+        setCurrentOffset((prev) => prev + PAGES_PER_LOAD);
+        setHasMorePages(morePagesFromDB.length === PAGES_PER_LOAD);
+      } else {
+        setHasMorePages(false);
+      }
+    } catch (error) {
+      console.error("Error loading more pages:", error);
+      Alert.alert("Error", "Failed to load more pages");
+    } finally {
+      setLoadingMore(false);
     }
-  }, [loadPages, isOnline, queueLength, pullFromServer]);
+  }, [currentOffset, loadingMore, hasMorePages]);
 
-  // Handle pull to refresh - updated with real sync methods
+  // Handle pull to refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
 
     try {
       if (isOnline) {
-        // Perform full sync (push local changes, then pull updates)
         await performFullSync();
       }
 
-      // Reload local pages
-      await loadPages();
+      // Reset pagination and reload from beginning
+      setCurrentOffset(0);
+      setHasMorePages(true);
+      await loadInitialPages();
     } catch (error) {
       console.error("Refresh error:", error);
       Alert.alert("Sync Error", "Failed to sync with server");
     } finally {
       setRefreshing(false);
     }
-  }, [isOnline, performFullSync, loadPages]);
+  }, [isOnline, performFullSync, loadInitialPages]);
 
+  // Create new page
   const createNewPage = async () => {
     try {
-      // Create the page in SQLite first
       const newPage = await pageRepository.createPage({
         title: "Untitled Page",
         content: "<p>Start writing...</p>",
@@ -110,16 +120,13 @@ export default function AllPagesScreen() {
         deleted: false,
       });
 
-      // Navigate to the real SQLite ID
       router.push({
         pathname: "/workspace/pages/[id]",
-        params: {
-          id: newPage.id.toString(),
-        },
+        params: { id: newPage.id.toString() },
       });
 
-      // Refresh the list to show the new page
-      loadPages();
+      // Refresh to show the new page at the top
+      await loadInitialPages();
     } catch (error) {
       Alert.alert("Error", "Failed to create page");
     }
@@ -128,9 +135,7 @@ export default function AllPagesScreen() {
   const openPage = (page: Page) => {
     router.push({
       pathname: "/workspace/pages/[id]",
-      params: {
-        id: page.id.toString(),
-      },
+      params: { id: page.id.toString() },
     });
   };
 
@@ -138,6 +143,20 @@ export default function AllPagesScreen() {
   const renderPageItem = ({ item }: { item: Page }) => (
     <PageItem item={item} onPress={openPage} />
   );
+
+  // Footer component for loading more indicator
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+
+    return (
+      <View className="py-4 items-center">
+        <ActivityIndicator size="small" color="#3b82f6" />
+        <Text className="text-gray-500 text-sm mt-2">
+          Loading more pages...
+        </Text>
+      </View>
+    );
+  };
 
   // Empty state component
   const EmptyState = () => (
@@ -152,8 +171,27 @@ export default function AllPagesScreen() {
     </View>
   );
 
-  // Loading state
-  if (loading) {
+  // Initial load and sync setup
+  useEffect(() => {
+    loadInitialPages();
+
+    // Trigger initial sync if online
+    if (isOnline) {
+      setTimeout(() => {
+        if (queueLength > 0) {
+          useSyncStore
+            .getState()
+            .processQueue()
+            .then(() => loadInitialPages());
+        } else {
+          pullFromServer().then(() => loadInitialPages());
+        }
+      }, 1000);
+    }
+  }, [loadInitialPages, isOnline, queueLength, pullFromServer]);
+
+  // Loading state for initial load
+  if (loading && pages.length === 0) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -164,10 +202,9 @@ export default function AllPagesScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Status Bar - updated with last sync timestamp */}
+      {/* Status Bar */}
       <View className="bg-white border-b border-gray-200 px-4 py-3">
         <View className="flex-row items-center justify-between">
-          {/* Network and sync status */}
           <View className="flex-row items-center">
             {isOnline ? (
               <Wifi size={16} color="#10b981" />
@@ -189,7 +226,6 @@ export default function AllPagesScreen() {
               </View>
             )}
 
-            {/* Last sync timestamp display */}
             {lastSyncTimestamp && (
               <Text className="text-gray-400 text-xs ml-4">
                 Last sync: {new Date(lastSyncTimestamp).toLocaleTimeString()}
@@ -197,7 +233,6 @@ export default function AllPagesScreen() {
             )}
           </View>
 
-          {/* Queue indicator */}
           {queueLength > 0 && (
             <View className="bg-blue-100 px-2 py-1 rounded-full">
               <Text className="text-blue-600 text-xs font-medium">
@@ -208,7 +243,7 @@ export default function AllPagesScreen() {
         </View>
       </View>
 
-      {/* Pages List - Fixed FlashList implementation */}
+      {/* Pages List with Infinite Scroll */}
       <FlashList
         data={pages}
         renderItem={renderPageItem}
@@ -227,8 +262,12 @@ export default function AllPagesScreen() {
           />
         }
         ListEmptyComponent={EmptyState}
+        ListFooterComponent={renderFooter}
         showsVerticalScrollIndicator={false}
         disableAutoLayout={false}
+        // Infinite scroll props
+        onEndReached={loadMorePages}
+        onEndReachedThreshold={0.1} // Trigger when 90% scrolled
       />
 
       {/* Floating Action Button */}

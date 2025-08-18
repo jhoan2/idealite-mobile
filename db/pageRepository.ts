@@ -1,5 +1,5 @@
 // db/pageRepository.ts - Simple update to include new fields
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../providers/DatabaseProvider";
 import {
   getCurrentUTCTimestamp,
@@ -139,10 +139,30 @@ export const pageRepository = {
   },
 
   // Get all active pages (not deleted)
-  getActivePages: async (): Promise<Page[]> => {
-    return await db.select().from(pages).where(eq(pages.deleted, false));
-  },
+  getActivePages: async (limit?: number, offset?: number): Promise<Page[]> => {
+    const baseQuery = db
+      .select()
+      .from(pages)
+      .where(eq(pages.deleted, false))
+      .orderBy(desc(pages.updated_at)); // Most recent first
 
+    // Handle different pagination scenarios
+    if (limit !== undefined && offset !== undefined) {
+      return await baseQuery.limit(limit).offset(offset);
+    } else if (limit !== undefined) {
+      return await baseQuery.limit(limit);
+    } else {
+      return await baseQuery;
+    }
+  },
+  getActivePagesCount: async (): Promise<number> => {
+    const result = await db
+      .select({ count: pages.id })
+      .from(pages)
+      .where(eq(pages.deleted, false));
+
+    return result.length;
+  },
   // Find page by server ID
   findByServerId: async (serverId: string): Promise<Page | undefined> => {
     const [page] = await db
