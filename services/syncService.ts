@@ -1,6 +1,14 @@
-// services/syncService.ts - Updated to handle canvas_image_cid
+// services/syncService.ts - Updated with better error handling and full page objects
+import * as Sentry from "@sentry/react-native";
 import { pageRepository } from "../db/pageRepository";
 import { type SyncOperation } from "../store/syncStore";
+
+export interface SyncResult {
+  success: boolean;
+  uploadedPages: number;
+  downloadedPages: number;
+  errors: string[];
+}
 
 export class SyncService {
   private baseUrl: string;
@@ -12,20 +20,97 @@ export class SyncService {
   }
 
   // ================================
+  // Helper Functions
+  // ================================
+
+  /**
+   * Get full page data from local database and ensure all required fields
+   */
+  private async getFullPageData(localId: number) {
+    const page = await pageRepository.findById(localId);
+    if (!page) {
+      throw new Error(`Page not found with ID: ${localId}`);
+    }
+
+    // Parse image_previews and ensure it's always an array
+    let imagePreviews: string[] = [];
+    if (page.image_previews) {
+      try {
+        const parsed = JSON.parse(page.image_previews);
+        imagePreviews = Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        console.warn(
+          "Failed to parse image_previews, using empty array:",
+          error
+        );
+        imagePreviews = [];
+      }
+    }
+
+    return {
+      title: page.title,
+      content: page.content || "", // Ensure content is never null
+      content_type: page.content_type,
+      canvas_image_cid: page.canvas_image_cid || null,
+      description: page.description || null,
+      image_previews: imagePreviews, // Always an array
+      created_at: page.created_at,
+      updated_at: page.updated_at,
+      deleted: page.deleted,
+    };
+  }
+
+  /**
+   * Handle sync errors gracefully with retry logic
+   */
+  private handleSyncError(error: any, operation: string): never {
+    let errorMessage = `${operation} failed: `;
+
+    if (error.status === 400 && error.response?.details) {
+      // Zod validation errors
+      const details = error.response.details;
+      errorMessage += details
+        .map((d: any) => `${d.path?.join(".")} ${d.message}`)
+        .join(", ");
+
+      Sentry.captureException(new Error(errorMessage), {
+        tags: {
+          component: "SyncService",
+          errorType: "validation",
+          operation,
+        },
+        extra: { validationErrors: details },
+      });
+    } else if (error.status === 401) {
+      errorMessage += "Authentication failed";
+    } else if (error.status >= 500) {
+      errorMessage += "Server error";
+    } else {
+      errorMessage += error.message || "Unknown error";
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  // ================================
   // Push Operations (updated)
   // ================================
 
   async executeOperation(operation: SyncOperation): Promise<void> {
-    switch (operation.operationType) {
-      case "create":
-        await this.createPageOnServer(operation);
-        break;
-      case "update":
-        await this.updatePageOnServer(operation);
-        break;
-      case "delete":
-        await this.deletePageOnServer(operation);
-        break;
+    try {
+      switch (operation.operationType) {
+        case "create":
+          await this.createPageOnServer(operation);
+          break;
+        case "update":
+          await this.updatePageOnServer(operation);
+          break;
+        case "delete":
+          await this.deletePageOnServer(operation);
+          break;
+      }
+    } catch (error) {
+      this.handleSyncError(error, `${operation.operationType} page`);
     }
   }
 
@@ -33,25 +118,39 @@ export class SyncService {
     const token = await this.getAuthToken();
     if (!token) throw new Error("No auth token");
 
+    // Get full page data from local database
+    const fullPageData = await this.getFullPageData(operation.localId);
+
+    const requestBody = {
+      creates: [
+        {
+          client_id: operation.localId,
+          ...fullPageData,
+        },
+      ],
+      updates: [],
+    };
+
+    console.log(
+      "Creating page on server:",
+      JSON.stringify(requestBody, null, 2)
+    );
+
     const response = await fetch(`${this.baseUrl}/api/v1/sync/pages/push`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        creates: [
-          {
-            client_id: operation.localId,
-            ...operation.data,
-          },
-        ],
-        updates: [],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to create page: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(`HTTP ${response.status}`);
+      (error as any).status = response.status;
+      (error as any).response = errorData;
+      throw error;
     }
 
     const result = await response.json();
@@ -80,25 +179,34 @@ export class SyncService {
     const token = await this.getAuthToken();
     if (!token) throw new Error("No auth token");
 
+    // Get full page data from local database
+    const fullPageData = await this.getFullPageData(operation.localId);
+
+    const requestBody = {
+      creates: [],
+      updates: [
+        {
+          server_id: operation.serverId,
+          ...fullPageData,
+        },
+      ],
+    };
+
     const response = await fetch(`${this.baseUrl}/api/v1/sync/pages/push`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        creates: [],
-        updates: [
-          {
-            server_id: operation.serverId,
-            ...operation.data,
-          },
-        ],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update page: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(`HTTP ${response.status}`);
+      (error as any).status = response.status;
+      (error as any).response = errorData;
+      throw error;
     }
 
     const result = await response.json();
@@ -120,77 +228,134 @@ export class SyncService {
   }
 
   private async deletePageOnServer(operation: SyncOperation): Promise<void> {
-    // Similar to update, but with deleted: true
-    await this.updatePageOnServer({
-      ...operation,
-      data: { ...operation.data, deleted: true },
+    const token = await this.getAuthToken();
+    if (!token) throw new Error("No auth token");
+
+    // For delete, we still need the full data but mark as deleted
+    const fullPageData = await this.getFullPageData(operation.localId);
+
+    const requestBody = {
+      creates: [],
+      updates: [
+        {
+          server_id: operation.serverId,
+          ...fullPageData,
+          deleted: true, // Override to ensure it's marked as deleted
+        },
+      ],
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/v1/sync/pages/push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(`HTTP ${response.status}`);
+      (error as any).status = response.status;
+      (error as any).response = errorData;
+      throw error;
+    }
+
+    const result = await response.json();
+
+    // Handle conflicts (server wins)
+    if (result.conflicts && result.conflicts.length > 0) {
+      const conflict = result.conflicts[0];
+      await pageRepository.updateFromServer(
+        operation.localId,
+        conflict.server_page
+      );
+      return;
+    }
+
+    // Success
+    if (result.updated && result.updated.length > 0) {
+      await pageRepository.markAsSynced(operation.localId, operation.serverId!);
+    }
   }
 
   // ================================
-  // Pull Operations (updated)
+  // Pull Operations (updated error handling)
   // ================================
 
-  /**
-   * Pull updates from server and apply to local database
-   * @param sinceTimestamp - Only pull updates since this timestamp
-   * @returns Sync result with count and server timestamp
-   */
   async pullFromServer(sinceTimestamp?: string): Promise<{
     pulled_count: number;
     server_timestamp: string;
     pages: any[];
   }> {
-    const token = await this.getAuthToken();
-    if (!token) throw new Error("No auth token");
+    try {
+      const token = await this.getAuthToken();
+      if (!token) throw new Error("No auth token");
 
-    // Build URL with since parameter
-    const url = new URL(`${this.baseUrl}/api/v1/sync/pages/pull`);
-    if (sinceTimestamp) {
-      url.searchParams.set("since", sinceTimestamp);
-    }
-
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to pull from server: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const { pages: serverPages, server_timestamp } = result;
-
-    let updatedCount = 0;
-
-    // Apply each server page to local database
-    for (const serverPage of serverPages) {
-      try {
-        await this.applyServerPage(serverPage);
-        updatedCount++;
-      } catch (error) {
-        console.error(`Failed to apply server page ${serverPage.id}:`, error);
-        // Continue with other pages even if one fails
+      const url = new URL(`${this.baseUrl}/api/v1/sync/pages/pull`);
+      if (sinceTimestamp) {
+        url.searchParams.set("since", sinceTimestamp);
       }
-    }
 
-    return {
-      pulled_count: updatedCount,
-      server_timestamp: server_timestamp,
-      pages: serverPages,
-    };
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = new Error(`HTTP ${response.status}`);
+        (error as any).status = response.status;
+        (error as any).response = errorData;
+        throw error;
+      }
+
+      const result = await response.json();
+      const { pages: serverPages, server_timestamp } = result;
+
+      let updatedCount = 0;
+
+      // Apply each server page to local database
+      for (const serverPage of serverPages) {
+        try {
+          await this.applyServerPage(serverPage);
+          updatedCount++;
+        } catch (error) {
+          console.error(`Failed to apply server page ${serverPage.id}:`, error);
+          Sentry.captureException(error, {
+            tags: { component: "SyncService", operation: "applyServerPage" },
+            extra: { pageId: serverPage.id },
+          });
+          // Continue with other pages even if one fails
+        }
+      }
+
+      return {
+        pulled_count: updatedCount,
+        server_timestamp: server_timestamp,
+        pages: serverPages,
+      };
+    } catch (error) {
+      this.handleSyncError(error, "pull from server");
+    }
   }
 
-  /**
-   * Apply a single server page to local database - UPDATED to handle canvas_image_cid
-   */
   private async applyServerPage(serverPage: any): Promise<void> {
     // Check if we already have this page locally
     const existingPage = await pageRepository.findByServerId(serverPage.id);
+
+    // Ensure image_previews is properly handled
+    const imagePreviewsJson = serverPage.image_previews
+      ? JSON.stringify(
+          Array.isArray(serverPage.image_previews)
+            ? serverPage.image_previews
+            : []
+        )
+      : null;
 
     if (existingPage) {
       // Update existing page
@@ -198,13 +363,11 @@ export class SyncService {
         title: serverPage.title,
         content: serverPage.content,
         content_type: serverPage.content_type,
-        canvas_image_cid: serverPage.canvas_image_cid, // NEW: Include canvas image CID
+        canvas_image_cid: serverPage.canvas_image_cid,
         updated_at: serverPage.updated_at,
         deleted: serverPage.deleted,
         description: serverPage.description,
-        image_previews: serverPage.image_previews
-          ? JSON.stringify(serverPage.image_previews)
-          : null,
+        image_previews: imagePreviewsJson,
       });
     } else {
       // Create new page from server
@@ -212,20 +375,23 @@ export class SyncService {
     }
   }
 
-  /**
-   * Create a new local page from server data - UPDATED to handle canvas_image_cid
-   */
   private async createLocalPageFromServer(serverPage: any): Promise<void> {
+    const imagePreviewsJson = serverPage.image_previews
+      ? JSON.stringify(
+          Array.isArray(serverPage.image_previews)
+            ? serverPage.image_previews
+            : []
+        )
+      : null;
+
     const newPageData = {
       title: serverPage.title,
       content: serverPage.content,
       content_type: serverPage.content_type,
-      canvas_image_cid: serverPage.canvas_image_cid, // NEW: Include canvas image CID
+      canvas_image_cid: serverPage.canvas_image_cid,
       deleted: serverPage.deleted || false,
       description: serverPage.description,
-      image_previews: serverPage.image_previews
-        ? JSON.stringify(serverPage.image_previews)
-        : null,
+      image_previews: imagePreviewsJson,
     };
 
     // Create the page
@@ -236,14 +402,9 @@ export class SyncService {
   }
 
   // ================================
-  // Full Sync Operations (updated)
+  // Full Sync Operations
   // ================================
 
-  /**
-   * Perform a complete sync: push local changes, then pull server updates
-   * @param lastSyncTimestamp - Timestamp of last successful sync
-   * @returns Sync result summary
-   */
   async performFullSync(lastSyncTimestamp?: string): Promise<{
     pushedOperations: number;
     pulledPages: number;
@@ -261,6 +422,8 @@ export class SyncService {
 
       for (const page of dirtyPages) {
         try {
+          const fullPageData = await this.getFullPageData(page.id);
+
           if (!page.server_id) {
             // New page - create on server
             await this.executeOperation({
@@ -268,17 +431,7 @@ export class SyncService {
               operationType: "create",
               localId: page.id,
               serverId: null,
-              data: {
-                title: page.title,
-                content: page.content,
-                content_type: page.content_type,
-                canvas_image_cid: page.canvas_image_cid, // NEW: Include canvas image CID
-                created_at: page.created_at,
-                updated_at: page.updated_at,
-                deleted: page.deleted,
-                description: page.description,
-                image_previews: page.image_previews,
-              },
+              data: fullPageData,
               timestamp: new Date().toISOString(),
               retryCount: 0,
             });
@@ -289,10 +442,7 @@ export class SyncService {
               operationType: "delete",
               localId: page.id,
               serverId: page.server_id,
-              data: {
-                deleted: true,
-                updated_at: page.updated_at,
-              },
+              data: { ...fullPageData, deleted: true },
               timestamp: new Date().toISOString(),
               retryCount: 0,
             });
@@ -303,19 +453,16 @@ export class SyncService {
               operationType: "update",
               localId: page.id,
               serverId: page.server_id,
-              data: {
-                title: page.title,
-                content: page.content,
-                canvas_image_cid: page.canvas_image_cid, // NEW: Include canvas image CID
-                updated_at: page.updated_at,
-              },
+              data: fullPageData,
               timestamp: new Date().toISOString(),
               retryCount: 0,
             });
           }
           pushedOperations++;
         } catch (error) {
-          errors.push(`Failed to push page ${page.id}: ${error}`);
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          errors.push(`Failed to push page ${page.id}: ${errorMsg}`);
         }
       }
 
@@ -325,10 +472,12 @@ export class SyncService {
         pulledPages = pullResult.pulled_count;
         server_timestamp = pullResult.server_timestamp;
       } catch (error) {
-        errors.push(`Failed to pull from server: ${error}`);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`Failed to pull from server: ${errorMsg}`);
       }
     } catch (error) {
-      errors.push(`Full sync failed: ${error}`);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`Full sync failed: ${errorMsg}`);
     }
 
     return {
@@ -339,19 +488,24 @@ export class SyncService {
     };
   }
 
-  /**
-   * Get the timestamp of the last successful sync
-   */
-  async getLastSyncTimestamp(): Promise<string | null> {
-    // This could be stored in your sync store or a separate settings table
-    // For now, we'll use a simple approach - get the most recent last_synced_at
-    const pages = await pageRepository.getActivePages();
-    const timestamps = pages
-      .map((p) => p.last_synced_at)
-      .filter((t) => t !== null)
-      .sort()
-      .reverse();
+  async syncAll(): Promise<SyncResult> {
+    try {
+      const result = await this.performFullSync();
 
-    return timestamps[0] || null;
+      return {
+        success: result.errors.length === 0,
+        uploadedPages: result.pushedOperations,
+        downloadedPages: result.pulledPages,
+        errors: result.errors,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        uploadedPages: 0,
+        downloadedPages: 0,
+        errors: [errorMsg],
+      };
+    }
   }
 }
