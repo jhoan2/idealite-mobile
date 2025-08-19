@@ -167,22 +167,37 @@ export default function BodyEditor({
       lastSavedContent.current = newContent;
       setHasUnsavedChanges(false);
 
-      // Queue sync operation
+      // FIXED: Proper operation type determination
       const freshPage = await pageRepository.findById(pageIdNumber);
       if (freshPage) {
+        const operationType = freshPage.server_id ? "update" : "create";
+
         useSyncStore.getState().queueOperation({
-          operationType: "update",
+          operationType,
           localId: pageIdNumber,
           serverId: freshPage.server_id,
-          data: {
-            content: freshPage.content,
-            updated_at: new Date().toISOString(),
-          },
+          data:
+            operationType === "create"
+              ? {
+                  // For create operations, include all required fields
+                  title: freshPage.title,
+                  content: freshPage.content,
+                  content_type: freshPage.content_type,
+                  canvas_image_cid: freshPage.canvas_image_cid,
+                  description: freshPage.description,
+                  image_previews: freshPage.image_previews,
+                  created_at: freshPage.created_at,
+                  updated_at: new Date().toISOString(),
+                  deleted: freshPage.deleted,
+                }
+              : {
+                  // For update operations, only include changed fields
+                  content: freshPage.content,
+                  updated_at: new Date().toISOString(),
+                },
         });
-        console.log("Sync operation queued");
       }
     } catch (error) {
-      console.error("Error saving content:", error);
       const errorMessage = captureAndFormatError(error, {
         operation: "save page content",
         component: "BodyEditor",

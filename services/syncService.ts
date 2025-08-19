@@ -1,4 +1,4 @@
-// services/syncService.ts - Updated with better error handling and full page objects
+// services/syncService.ts - Enhanced with better error handling and full page objects
 import * as Sentry from "@sentry/react-native";
 import { pageRepository } from "../db/pageRepository";
 import { type SyncOperation } from "../store/syncStore";
@@ -93,7 +93,7 @@ export class SyncService {
   }
 
   // ================================
-  // Push Operations (updated)
+  // Push Operations
   // ================================
 
   async executeOperation(operation: SyncOperation): Promise<void> {
@@ -130,11 +130,6 @@ export class SyncService {
       ],
       updates: [],
     };
-
-    console.log(
-      "Creating page on server:",
-      JSON.stringify(requestBody, null, 2)
-    );
 
     const response = await fetch(`${this.baseUrl}/api/v1/sync/pages/push`, {
       method: "POST",
@@ -178,6 +173,13 @@ export class SyncService {
   private async updatePageOnServer(operation: SyncOperation): Promise<void> {
     const token = await this.getAuthToken();
     if (!token) throw new Error("No auth token");
+
+    // FIXED: Validate that we have a server_id for updates
+    if (!operation.serverId) {
+      throw new Error(
+        `Cannot update page without server_id. Page ${operation.localId} should be created first.`
+      );
+    }
 
     // Get full page data from local database
     const fullPageData = await this.getFullPageData(operation.localId);
@@ -223,13 +225,20 @@ export class SyncService {
 
     // Success
     if (result.updated && result.updated.length > 0) {
-      await pageRepository.markAsSynced(operation.localId, operation.serverId!);
+      await pageRepository.markAsSynced(operation.localId, operation.serverId);
     }
   }
 
   private async deletePageOnServer(operation: SyncOperation): Promise<void> {
     const token = await this.getAuthToken();
     if (!token) throw new Error("No auth token");
+
+    // FIXED: Validate that we have a server_id for deletes
+    if (!operation.serverId) {
+      throw new Error(
+        `Cannot delete page without server_id. Page ${operation.localId} should be created first.`
+      );
+    }
 
     // For delete, we still need the full data but mark as deleted
     const fullPageData = await this.getFullPageData(operation.localId);
@@ -276,12 +285,12 @@ export class SyncService {
 
     // Success
     if (result.updated && result.updated.length > 0) {
-      await pageRepository.markAsSynced(operation.localId, operation.serverId!);
+      await pageRepository.markAsSynced(operation.localId, operation.serverId);
     }
   }
 
   // ================================
-  // Pull Operations (updated error handling)
+  // Pull Operations
   // ================================
 
   async pullFromServer(sinceTimestamp?: string): Promise<{
@@ -417,47 +426,50 @@ export class SyncService {
     let server_timestamp: string | undefined;
 
     try {
-      // Step 1: Push all dirty local pages
+      // Step 1: Push all dirty local pages with PROPER create/update logic
       const dirtyPages = await pageRepository.getDirtyPages();
 
       for (const page of dirtyPages) {
         try {
-          const fullPageData = await this.getFullPageData(page.id);
-
-          if (!page.server_id) {
+          if (!page.server_id && !page.deleted) {
             // New page - create on server
             await this.executeOperation({
               id: `sync-${Date.now()}-${Math.random()}`,
               operationType: "create",
               localId: page.id,
               serverId: null,
-              data: fullPageData,
+              data: {}, // Will be filled by getFullPageData
               timestamp: new Date().toISOString(),
               retryCount: 0,
             });
-          } else if (page.deleted) {
-            // Deleted page - update on server
+          } else if (page.server_id && page.deleted) {
+            // Existing page being deleted - update on server
             await this.executeOperation({
               id: `sync-${Date.now()}-${Math.random()}`,
               operationType: "delete",
               localId: page.id,
               serverId: page.server_id,
-              data: { ...fullPageData, deleted: true },
+              data: {}, // Will be filled by getFullPageData
               timestamp: new Date().toISOString(),
               retryCount: 0,
             });
-          } else {
-            // Modified page - update on server
+          } else if (page.server_id && !page.deleted) {
+            // Existing page being modified - update on server
             await this.executeOperation({
               id: `sync-${Date.now()}-${Math.random()}`,
               operationType: "update",
               localId: page.id,
               serverId: page.server_id,
-              data: fullPageData,
+              data: {}, // Will be filled by getFullPageData
               timestamp: new Date().toISOString(),
               retryCount: 0,
             });
+          } else {
+            // Edge case: deleted page without server_id - just mark as clean
+            console.log(`Skipping deleted page without server_id: ${page.id}`);
+            await pageRepository.markAsSynced(page.id, "local-only-deleted");
           }
+
           pushedOperations++;
         } catch (error) {
           const errorMsg =
@@ -507,5 +519,16 @@ export class SyncService {
         errors: [errorMsg],
       };
     }
+  }
+
+  async getLastSyncTimestamp(): Promise<string | null> {
+    const pages = await pageRepository.getActivePages();
+    const timestamps = pages
+      .map((p) => p.last_synced_at)
+      .filter((t) => t !== null)
+      .sort()
+      .reverse();
+
+    return timestamps[0] || null;
   }
 }

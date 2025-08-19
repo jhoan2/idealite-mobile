@@ -72,7 +72,7 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
     }
   }, [pageIdNumber, pageId]);
 
-  // UPDATED: Save to SQLite with unique title handling
+  // UPDATED: Save to SQLite with unique title handling and fixed sync operation logic
   const saveTitle = async (newTitle: string) => {
     const trimmed = newTitle.trim();
     if (!trimmed || trimmed === lastSavedTitle.current || !page) return;
@@ -92,7 +92,7 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
     try {
       setIsUpdating(true);
 
-      // UPDATED: Use the new method that handles unique titles
+      // Use the method that handles unique titles
       const updatedPage = await pageRepository.updatePageWithUniqueTitle(
         pageIdNumber,
         trimmed
@@ -107,15 +107,32 @@ const HeadingEditor: React.FC<HeadingEditorProps> = ({
       // Get fresh page data from SQLite before queuing sync
       const freshPage = await pageRepository.findById(pageIdNumber);
       if (freshPage) {
-        // Queue sync operation with complete current page state
+        // FIXED: Proper operation type determination
+        const operationType = freshPage.server_id ? "update" : "create";
+
         useSyncStore.getState().queueOperation({
-          operationType: "update",
+          operationType,
           localId: pageIdNumber,
           serverId: freshPage.server_id,
-          data: {
-            title: freshPage.title,
-            updated_at: new Date().toISOString(),
-          },
+          data:
+            operationType === "create"
+              ? {
+                  // For create operations, include all required fields
+                  title: freshPage.title,
+                  content: freshPage.content,
+                  content_type: freshPage.content_type,
+                  canvas_image_cid: freshPage.canvas_image_cid,
+                  description: freshPage.description,
+                  image_previews: freshPage.image_previews,
+                  created_at: freshPage.created_at,
+                  updated_at: new Date().toISOString(),
+                  deleted: freshPage.deleted,
+                }
+              : {
+                  // For update operations, only include changed fields
+                  title: freshPage.title,
+                  updated_at: new Date().toISOString(),
+                },
         });
       }
 

@@ -1,12 +1,9 @@
-// lib/api/client.ts
+// lib/api/client.ts - Fixed retry logic
 import { useAuth } from "@clerk/clerk-expo";
 import * as Sentry from "@sentry/react-native";
-// import * as Network from 'expo-network';
 import { Alert } from "react-native";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-
-// Request timeout in milliseconds
 const REQUEST_TIMEOUT = 30000;
 
 export class ApiError extends Error {
@@ -15,7 +12,8 @@ export class ApiError extends Error {
     public status: number,
     public response?: any,
     public isNetworkError: boolean = false,
-    public isAuthError: boolean = false
+    public isAuthError: boolean = false,
+    public isRetryable: boolean = false // NEW: Explicit retryable flag
   ) {
     super(message);
     this.name = "ApiError";
@@ -29,26 +27,14 @@ interface RequestOptions extends RequestInit {
 }
 
 export const createApiClient = (getToken: () => Promise<string | null>) => {
-  // Helper function to check network connectivity
-  // const checkNetworkConnectivity = async (): Promise<boolean> => {
-  //   try {
-  //     const networkState = await Network.getNetworkStateAsync();
-  //     return networkState.isConnected ?? false;
-  //   } catch {
-  //     return true; // Assume connected if check fails
-  //   }
-  // };
-
-  // Helper function to create timeout promise
   const createTimeoutPromise = (timeout: number): Promise<never> => {
     return new Promise((_, reject) => {
       setTimeout(() => {
-        reject(new ApiError("Request timeout", 408, null, true));
+        reject(new ApiError("Request timeout", 408, null, true, false, true));
       }, timeout);
     });
   };
 
-  // Retry logic for failed requests
   const retryRequest = async (
     requestFn: () => Promise<Response>,
     retries: number,
@@ -59,11 +45,20 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
         return await requestFn();
       } catch (error) {
         const isLastAttempt = attempt === retries;
-        const isRetryableError =
-          error instanceof ApiError &&
-          (error.isNetworkError || error.status >= 500);
+
+        // NEW: Only retry if the error is actually retryable
+        const isRetryableError = error instanceof ApiError && error.isRetryable;
 
         if (isLastAttempt || !isRetryableError) {
+          // If it's a non-retryable error, don't waste time on more attempts
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (!isRetryableError && !isLastAttempt) {
+            console.log(
+              `Non-retryable error for ${endpoint}, stopping retries:`,
+              errorMessage
+            );
+          }
           throw error;
         }
 
@@ -79,7 +74,7 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
       }
     }
 
-    throw new Error("Retry logic failed"); // Should never reach here
+    throw new Error("Retry logic failed");
   };
 
   const request = async (
@@ -88,23 +83,12 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
   ): Promise<any> => {
     const {
       timeout = REQUEST_TIMEOUT,
-      retries = 2,
+      retries = 1, // REDUCED: Only 1 retry instead of 2
       skipAuthCheck = false,
       ...fetchOptions
     } = options;
 
     try {
-      // Check network connectivity first
-      // const isConnected = await checkNetworkConnectivity();
-      // if (!isConnected) {
-      //   throw new ApiError(
-      //     "No internet connection. Please check your network and try again.",
-      //     0,
-      //     null,
-      //     true
-      //   );
-      // }
-
       // Get authentication token
       let token: string | null = null;
       if (!skipAuthCheck) {
@@ -112,11 +96,7 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
           token = await getToken();
         } catch (authError) {
           Sentry.captureException(authError, {
-            tags: {
-              component: "ApiClient",
-              action: "get_token",
-              endpoint,
-            },
+            tags: { component: "ApiClient", action: "get_token", endpoint },
           });
 
           throw new ApiError(
@@ -124,7 +104,8 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
             401,
             authError,
             false,
-            true
+            true,
+            false // Auth errors are not retryable
           );
         }
       }
@@ -139,11 +120,9 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
         },
       };
 
-      // Create the fetch request with timeout
       const fetchRequest = () => fetch(url, config);
       const timeoutPromise = createTimeoutPromise(timeout);
 
-      // Execute request with retry logic and timeout
       const response = await retryRequest(
         async () => {
           const result = await Promise.race([fetchRequest(), timeoutPromise]);
@@ -162,20 +141,33 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
           try {
             errorData = await response.json();
           } catch {
-            // If JSON parsing fails, use response text
             errorData = { error: await response.text() };
           }
         }
 
         const isAuthError = response.status === 401 || response.status === 403;
         const isNetworkError = response.status >= 500;
+        const isClientError = response.status >= 400 && response.status < 500;
+
+        // NEW: Smart retryable logic
+        const isRetryable =
+          isNetworkError || response.status === 408 || response.status === 429;
+
+        // Log non-retryable errors for debugging
+        if (isClientError && !isRetryable) {
+          console.log(
+            `Non-retryable client error ${response.status} for ${endpoint}:`,
+            errorData
+          );
+        }
 
         throw new ApiError(
           errorData.error || errorData.message || `HTTP ${response.status}`,
           response.status,
           errorData,
           isNetworkError,
-          isAuthError
+          isAuthError,
+          isRetryable // NEW: Set retryable flag based on status
         );
       }
 
@@ -187,9 +179,7 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
 
       return await response.text();
     } catch (error) {
-      // Re-throw ApiErrors as-is
       if (error instanceof ApiError) {
-        // Log to Sentry with appropriate context
         Sentry.captureException(error, {
           tags: {
             component: "ApiClient",
@@ -197,6 +187,7 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
             httpStatus: error.status.toString(),
             isNetworkError: error.isNetworkError.toString(),
             isAuthError: error.isAuthError.toString(),
+            isRetryable: error.isRetryable.toString(), // NEW
           },
           extra: {
             url: `${API_BASE_URL}${endpoint}`,
@@ -226,24 +217,18 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
 
       // Handle unexpected errors
       console.error("Unexpected API error:", error);
-
       Sentry.captureException(error, {
-        tags: {
-          component: "ApiClient",
-          endpoint,
-          errorType: "unexpected",
-        },
-        extra: {
-          url: `${API_BASE_URL}${endpoint}`,
-          options: fetchOptions,
-        },
+        tags: { component: "ApiClient", endpoint, errorType: "unexpected" },
+        extra: { url: `${API_BASE_URL}${endpoint}`, options: fetchOptions },
       });
 
       throw new ApiError(
         "An unexpected error occurred. Please try again.",
         0,
         error,
-        true
+        true,
+        false,
+        true // Unexpected errors are retryable
       );
     }
   };
@@ -280,40 +265,48 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
         ...options,
       }),
 
-    /**
-     * Upload a React Native file object directly via multipart/form-data.
-     * Expects `file` to have { uri, name, type } shape.
-     */
     uploadImageFileDirect: async (file: {
       uri: string;
       name: string;
       type: string;
     }) => {
-      // 1. Build form-data
       const formData = new FormData();
       formData.append("file", file as any);
 
-      // 2. Get auth token
       let token: string | null;
       try {
         token = await getToken();
       } catch (err) {
-        throw new ApiError("Failed to get auth token", 401, err, false, true);
+        throw new ApiError(
+          "Failed to get auth token",
+          401,
+          err,
+          false,
+          true,
+          false
+        );
       }
 
-      // 3. Perform fetch
       const res = await fetch(`${API_BASE_URL}/api/image/cloudflare`, {
         method: "POST",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          // Let platform set Content-Type with boundary
         },
         body: formData,
       });
 
       if (!res.ok) {
         const text = await res.text();
-        throw new ApiError(`Upload failed: ${text}`, res.status);
+        const isRetryable =
+          res.status >= 500 || res.status === 408 || res.status === 429;
+        throw new ApiError(
+          `Upload failed: ${text}`,
+          res.status,
+          null,
+          res.status >= 500,
+          false,
+          isRetryable
+        );
       }
 
       const json = await res.json();
@@ -322,13 +315,11 @@ export const createApiClient = (getToken: () => Promise<string | null>) => {
   };
 };
 
-// Hook to get authenticated API client
 export const useApiClient = () => {
   const { getToken } = useAuth();
   return createApiClient(getToken);
 };
 
-// Helper hook for handling API errors consistently
 export const useApiErrorHandler = () => {
   const handleError = (error: unknown, context?: string) => {
     if (error instanceof ApiError) {
@@ -337,11 +328,12 @@ export const useApiErrorHandler = () => {
         status: error.status,
         isNetworkError: error.isNetworkError,
         isAuthError: error.isAuthError,
+        isRetryable: error.isRetryable, // NEW
       });
 
       return {
         message: error.message,
-        isRetryable: error.isNetworkError || error.status >= 500,
+        isRetryable: error.isRetryable, // Use the explicit flag
         isAuthError: error.isAuthError,
       };
     }

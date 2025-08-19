@@ -1,4 +1,4 @@
-// stores/syncStore.ts - Enhanced queue-based sync store with periodic and app backgrounding sync
+// stores/syncStore.ts - Enhanced queue-based sync store with smart error handling
 import * as Network from "expo-network";
 import { AppState, AppStateStatus } from "react-native";
 import { create } from "zustand";
@@ -152,7 +152,7 @@ export const useSyncStore = create<SyncStore>()(
         lastSyncAt: null,
         autoSyncEnabled: true,
         batchSize: 10,
-        maxRetries: 3,
+        maxRetries: 2, // REDUCED: From 3 to 2
         periodicSyncTimer: null,
         appStateSubscription: null,
         _syncService: null,
@@ -207,9 +207,6 @@ export const useSyncStore = create<SyncStore>()(
               ) {
                 // App is going to background - sync immediately if there are pending operations
                 if (isOnline && autoSyncEnabled && operationQueue.length > 0) {
-                  console.log(
-                    "📱 App backgrounding - immediate sync triggered"
-                  );
                   get().processQueue();
                 }
               }
@@ -333,8 +330,6 @@ export const useSyncStore = create<SyncStore>()(
             return;
           }
 
-          console.log(`🔄 Processing ${operationQueue.length} sync operations`);
-
           set((state) => {
             state.status = "syncing";
           });
@@ -434,8 +429,6 @@ export const useSyncStore = create<SyncStore>()(
               state.status = "idle";
               state.pullInProgress = false;
             });
-
-            console.log(`📥 Pulled ${result.pulled_count} pages from server`);
           } catch (error) {
             set((state) => {
               state.status = "error";
@@ -474,8 +467,6 @@ export const useSyncStore = create<SyncStore>()(
               state.status = "idle";
               state.successfulOperations += result.pushedOperations;
             });
-
-            console.log(`🔄 Full sync completed:`, result);
 
             // Log any errors that occurred during sync
             if (result.errors.length > 0) {
@@ -586,11 +577,57 @@ export const useSyncStore = create<SyncStore>()(
           throw new Error("_executeOperation not implemented");
         },
 
+        // ================================
+        // UPDATED: Smart Error Handling
+        // ================================
         _handleOperationError: async (operation: SyncOperation, error: any) => {
           const maxRetries = get().maxRetries;
 
+          // Check if error is retryable
+          const isApiError =
+            error && typeof error === "object" && error.name === "ApiError";
+          const isRetryable = isApiError ? error.isRetryable : true;
+
+          // Don't retry if error is not retryable (e.g., validation errors)
+          if (!isRetryable) {
+            get().removeOperation(operation.id);
+
+            set((state) => {
+              state.failedOperations += 1;
+              // Don't set status to error for validation errors - they're expected
+              if (error.status >= 500) {
+                state.status = "error";
+              }
+            });
+
+            // Only log validation errors in development or capture server errors
+            if (error.status >= 400 && error.status < 500) {
+              // Validation errors - only log in development
+              if (__DEV__) {
+                console.warn(`Validation error in sync:`, {
+                  operation: operation.operationType,
+                  pageId: operation.localId,
+                  error: error.message,
+                });
+              }
+            } else {
+              // Capture non-validation errors in Sentry
+              captureAndFormatError(error, {
+                operation: `sync ${operation.operationType} page`,
+                component: "SyncStore",
+                context: {
+                  pageId: operation.localId,
+                  serverId: operation.serverId,
+                  retryCount: operation.retryCount,
+                  isRetryable,
+                },
+              });
+            }
+            return;
+          }
+
+          // Retry logic for retryable errors
           if (operation.retryCount < maxRetries && get().isOnline) {
-            // Retry with exponential backoff
             operation.retryCount += 1;
             const delay = Math.min(
               1000 * Math.pow(2, operation.retryCount),
@@ -600,8 +637,6 @@ export const useSyncStore = create<SyncStore>()(
             setTimeout(async () => {
               try {
                 await get()._executeOperation(operation);
-
-                // Remove successful operation
                 get().removeOperation(operation.id);
 
                 set((state) => {
@@ -613,7 +648,7 @@ export const useSyncStore = create<SyncStore>()(
               }
             }, delay);
           } else {
-            // Max retries reached or offline - remove operation
+            // Max retries reached - remove operation
             get().removeOperation(operation.id);
 
             set((state) => {
@@ -622,12 +657,13 @@ export const useSyncStore = create<SyncStore>()(
             });
 
             captureAndFormatError(error, {
-              operation: `sync ${operation.operationType} page`,
+              operation: `sync ${operation.operationType} page (max retries)`,
               component: "SyncStore",
               context: {
                 pageId: operation.localId,
+                serverId: operation.serverId,
                 retryCount: operation.retryCount,
-                isLastRetry: true,
+                maxRetries,
               },
             });
           }
