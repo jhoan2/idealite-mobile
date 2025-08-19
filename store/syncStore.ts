@@ -1,5 +1,6 @@
-// stores/syncStore.ts - Enhanced queue-based sync store with pull functionality
+// stores/syncStore.ts - Enhanced queue-based sync store with periodic and app backgrounding sync
 import * as Network from "expo-network";
+import { AppState, AppStateStatus } from "react-native";
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
@@ -8,7 +9,6 @@ import { captureAndFormatError } from "../lib/sentry/errorHandler";
 // ================================
 // Types
 // ================================
-
 export type SyncOperationType = "create" | "update" | "delete";
 
 export interface SyncOperation {
@@ -26,7 +26,6 @@ export type SyncStatus = "idle" | "syncing" | "error";
 // ================================
 // Store Interface
 // ================================
-
 interface SyncStore {
   // Network & Status
   isOnline: boolean;
@@ -50,6 +49,10 @@ interface SyncStore {
   autoSyncEnabled: boolean;
   batchSize: number;
   maxRetries: number;
+
+  // Timers and app state
+  periodicSyncTimer: number | null;
+  appStateSubscription: any;
 
   // ================================
   // Actions
@@ -132,7 +135,6 @@ const canMergeOperations = (
 // ================================
 // Store Implementation
 // ================================
-
 export const useSyncStore = create<SyncStore>()(
   devtools(
     subscribeWithSelector(
@@ -151,6 +153,8 @@ export const useSyncStore = create<SyncStore>()(
         autoSyncEnabled: true,
         batchSize: 10,
         maxRetries: 3,
+        periodicSyncTimer: null,
+        appStateSubscription: null,
         _syncService: null,
 
         // ================================
@@ -163,19 +167,73 @@ export const useSyncStore = create<SyncStore>()(
             get().setNetworkStatus(networkState.isConnected ?? false);
 
             // Set up network listener
-            const subscription = Network.addNetworkStateListener((state) => {
-              const wasOffline = !get().isOnline;
-              get().setNetworkStatus(state.isConnected ?? false);
+            const networkSubscription = Network.addNetworkStateListener(
+              (state) => {
+                const wasOffline = !get().isOnline;
+                get().setNetworkStatus(state.isConnected ?? false);
 
-              // If we just came back online, start syncing
-              if (wasOffline && state.isConnected && get().autoSyncEnabled) {
-                setTimeout(() => get().processQueue(), 500);
+                // If we just came back online, start syncing after a short delay
+                if (wasOffline && state.isConnected && get().autoSyncEnabled) {
+                  setTimeout(() => get().processQueue(), 1000);
+                }
               }
+            );
+
+            // Set up periodic sync (every 60 seconds)
+            const periodicTimer = setInterval(() => {
+              const { isOnline, autoSyncEnabled, status, operationQueue } =
+                get();
+              if (
+                isOnline &&
+                autoSyncEnabled &&
+                status === "idle" &&
+                operationQueue.length > 0
+              ) {
+                get().processQueue();
+              }
+            }, 60000); // 60 seconds
+
+            set((state) => {
+              state.periodicSyncTimer = periodicTimer;
+            });
+
+            // Set up app state listener for backgrounding
+            const handleAppStateChange = (nextAppState: AppStateStatus) => {
+              const { isOnline, autoSyncEnabled, operationQueue } = get();
+
+              if (
+                nextAppState === "background" ||
+                nextAppState === "inactive"
+              ) {
+                // App is going to background - sync immediately if there are pending operations
+                if (isOnline && autoSyncEnabled && operationQueue.length > 0) {
+                  console.log(
+                    "📱 App backgrounding - immediate sync triggered"
+                  );
+                  get().processQueue();
+                }
+              }
+            };
+
+            const appStateSubscription = AppState.addEventListener(
+              "change",
+              handleAppStateChange
+            );
+
+            set((state) => {
+              state.appStateSubscription = appStateSubscription;
             });
 
             // Return cleanup function
             return () => {
-              subscription.remove();
+              networkSubscription.remove();
+              const timer = get().periodicSyncTimer;
+              if (timer !== null) {
+                clearInterval(timer);
+              }
+              if (get().appStateSubscription) {
+                get().appStateSubscription.remove();
+              }
             };
           } catch (error) {
             captureAndFormatError(error, {
@@ -241,14 +299,7 @@ export const useSyncStore = create<SyncStore>()(
             state.totalOperations += 1;
           });
 
-          // Auto-process if enabled and online
-          if (
-            get().autoSyncEnabled &&
-            get().isOnline &&
-            get().status === "idle"
-          ) {
-            setTimeout(() => get().processQueue(), 100);
-          }
+          // NO AUTO-PROCESSING - Let periodic timer and app backgrounding handle sync
         },
 
         clearQueue: () => {
@@ -281,6 +332,8 @@ export const useSyncStore = create<SyncStore>()(
           ) {
             return;
           }
+
+          console.log(`🔄 Processing ${operationQueue.length} sync operations`);
 
           set((state) => {
             state.status = "syncing";
@@ -381,6 +434,8 @@ export const useSyncStore = create<SyncStore>()(
               state.status = "idle";
               state.pullInProgress = false;
             });
+
+            console.log(`📥 Pulled ${result.pulled_count} pages from server`);
           } catch (error) {
             set((state) => {
               state.status = "error";
@@ -420,7 +475,7 @@ export const useSyncStore = create<SyncStore>()(
               state.successfulOperations += result.pushedOperations;
             });
 
-            console.log(`Full sync completed:`, result);
+            console.log(`🔄 Full sync completed:`, result);
 
             // Log any errors that occurred during sync
             if (result.errors.length > 0) {
@@ -486,6 +541,13 @@ export const useSyncStore = create<SyncStore>()(
         // Debug
         // ================================
         reset: () => {
+          const { periodicSyncTimer } = get();
+
+          // Clear timer
+          if (periodicSyncTimer !== null) {
+            clearInterval(periodicSyncTimer);
+          }
+
           set((state) => {
             state.operationQueue = [];
             state.processingOperation = null;
@@ -496,6 +558,8 @@ export const useSyncStore = create<SyncStore>()(
             state.failedOperations = 0;
             state.lastSyncAt = null;
             state.lastSyncTimestamp = null;
+            state.periodicSyncTimer = null;
+            state.appStateSubscription = null;
           });
         },
 
@@ -511,6 +575,7 @@ export const useSyncStore = create<SyncStore>()(
             lastSyncTimestamp: state.lastSyncTimestamp,
             pullInProgress: state.pullInProgress,
             isOnline: state.isOnline,
+            hasPeriodicTimer: state.periodicSyncTimer !== null,
           };
         },
 
@@ -562,6 +627,7 @@ export const useSyncStore = create<SyncStore>()(
               context: {
                 pageId: operation.localId,
                 retryCount: operation.retryCount,
+                isLastRetry: true,
               },
             });
           }
@@ -583,3 +649,5 @@ export const useLastSyncTimestamp = () =>
   useSyncStore((state) => state.lastSyncTimestamp);
 export const usePullInProgress = () =>
   useSyncStore((state) => state.pullInProgress);
+export const useHasPeriodicTimer = () =>
+  useSyncStore((state) => state.periodicSyncTimer !== null);
