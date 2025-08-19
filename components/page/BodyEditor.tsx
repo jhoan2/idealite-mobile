@@ -1,4 +1,4 @@
-// Debug BodyEditor - Add features back one by one
+// Debug BodyEditor - Fixed initialization issue
 import {
   DEFAULT_TOOLBAR_ITEMS,
   RichText,
@@ -45,26 +45,24 @@ export default function BodyEditor({
   pageId,
   initialContent,
 }: BodyEditorProps) {
-  // STEP 5: Add back API client
   const api = useApiClient();
 
-  // STEP 3: Add back original state
   const [page, setPage] = useState<Page | null>(null);
   const [content, setContent] = useState("");
-  const [isLoading, setIsLoading] = useState(true); // This might be the culprit!
+  const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const lastSavedContent = useRef<string>("");
 
-  // STEP 4: Add back debouncing
+  // NEW: Track if we've initialized the editor content
+  const hasInitialized = useRef(false);
+
   const [debouncedContent] = useDebounce(content, 2000);
 
   // Convert pageId to number
   const pageIdNumber = parseInt(pageId);
 
   const editor = useEditorBridge({
-    // STEP 1: Comment this out first
-    // customSource: editorHtml,
     bridgeExtensions: [
       ...TenTapStartKit,
       ParagraphWithIds,
@@ -85,14 +83,16 @@ export default function BodyEditor({
     onChange: async () => {
       try {
         const html = await editor.getHTML();
+        console.log("Editor content changed:", html);
         setContent(html);
+        setHasUnsavedChanges(true);
       } catch (err) {
         console.error("Failed to get editor content", err);
       }
     },
   });
 
-  // STEP 3: Add back database loading
+  // Load page from database
   useEffect(() => {
     const loadPage = async () => {
       try {
@@ -140,15 +140,18 @@ export default function BodyEditor({
     }
   }, [pageIdNumber, pageId, initialContent]);
 
+  // FIXED: Only initialize editor content once when page loads
   useEffect(() => {
-    if (page?.content && page.content !== content) {
+    if (page?.content && !hasInitialized.current) {
+      console.log("Initializing editor with page content:", page.content);
       editor.setContent(page.content);
       setContent(page.content);
       lastSavedContent.current = page.content;
+      hasInitialized.current = true;
     }
-  }, [page?.content, editor, content]);
+  }, [page?.content, editor]);
 
-  // STEP 4: Add back simplified save function
+  // Save function
   const saveContent = async (newContent: string) => {
     if (!newContent || newContent === lastSavedContent.current || !page) {
       return;
@@ -164,7 +167,7 @@ export default function BodyEditor({
       lastSavedContent.current = newContent;
       setHasUnsavedChanges(false);
 
-      // STEP 6: Add back sync store operations
+      // Queue sync operation
       const freshPage = await pageRepository.findById(pageIdNumber);
       if (freshPage) {
         useSyncStore.getState().queueOperation({
@@ -197,11 +200,13 @@ export default function BodyEditor({
     }
   };
 
+  // Auto-save when content changes
   useEffect(() => {
     if (
       debouncedContent &&
       debouncedContent !== lastSavedContent.current &&
-      page
+      page &&
+      hasInitialized.current // Only save after we've initialized
     ) {
       saveContent(debouncedContent);
     }
@@ -230,7 +235,6 @@ export default function BodyEditor({
         </View>
       )}
 
-      {/* Show editor even while loading to test */}
       <RichText editor={editor} style={styles.editor} />
 
       <KeyboardAvoidingView
@@ -253,11 +257,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 0,
     width: "100%",
-  },
-  debug: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 8,
   },
   loadingContainer: {
     position: "absolute",

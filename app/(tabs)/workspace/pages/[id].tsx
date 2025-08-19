@@ -92,7 +92,11 @@ export default function NoteEditorScreen() {
       <HeadingEditor pageId={pageId!} placeholder="Enter page title..." />
 
       {/* Pass the real content from SQLite */}
-      <BodyEditor pageId={pageId!} initialContent={initialContent} />
+      <BodyEditor
+        key={pageId}
+        pageId={pageId!}
+        initialContent={initialContent}
+      />
     </SafeAreaView>
   );
 }
