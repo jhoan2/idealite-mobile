@@ -1,32 +1,15 @@
 // components/dashboard/TagHierarchyBrowser.tsx
-import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { FlashList } from "@shopify/flash-list";
 import * as Haptics from "expo-haptics";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Pin,
-  PinOff,
-  Star,
-} from "lucide-react-native";
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { ChevronLeft, ChevronRight, Star } from "lucide-react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import {
   useTagHierarchy,
-  useToggleTagPin,
   type TagHierarchyNode,
 } from "../../hooks/dashboard/useTagHierarchy";
-
-const { width: screenWidth } = Dimensions.get("window");
 
 // Progress ring component with SVG
 interface ProgressRingProps {
@@ -108,23 +91,19 @@ type Breadcrumb = {
 
 interface TagHierarchyBrowserProps {
   maxHeight?: number;
+  onTagLongPress?: (tag: TagHierarchyNode) => void;
 }
 
 export function TagHierarchyBrowser({
   maxHeight = 400,
+  onTagLongPress,
 }: TagHierarchyBrowserProps) {
   const insets = useSafeAreaInsets();
   const { data: tagTree, isLoading, error, refetch } = useTagHierarchy();
-  const togglePinMutation = useToggleTagPin();
 
   // Navigation state
   const [currentTagId, setCurrentTagId] = useState("root");
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([]);
-
-  // Bottom sheet state
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const [selectedTag, setSelectedTag] = useState<TagHierarchyNode | null>(null);
-  const snapPoints = useMemo(() => ["25%", "50%"], []);
 
   const currentTag = tagTree?.[currentTagId];
   const children: TagHierarchyNode[] = useMemo(() => {
@@ -195,11 +174,13 @@ export function TagHierarchyBrowser({
     [currentTag, currentTagId]
   );
 
-  const handleItemLongPress = useCallback((tag: TagHierarchyNode) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSelectedTag(tag);
-    bottomSheetRef.current?.snapToIndex(1);
-  }, []);
+  const handleItemLongPress = useCallback(
+    (tag: TagHierarchyNode) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      onTagLongPress?.(tag);
+    },
+    [onTagLongPress]
+  );
 
   const handleBackPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -210,27 +191,6 @@ export function TagHierarchyBrowser({
       setCurrentTagId(lastBreadcrumb.id);
     }
   }, [breadcrumbs]);
-
-  const handleTogglePin = useCallback(async () => {
-    if (!selectedTag) return;
-
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      await togglePinMutation.mutateAsync({
-        tagId: selectedTag.id,
-        isPinned: !selectedTag.isPinned,
-      });
-
-      bottomSheetRef.current?.close();
-      setSelectedTag(null);
-
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Failed to update pin status");
-    }
-  }, [selectedTag, togglePinMutation]);
 
   const renderTagCard = useCallback(
     ({ tag, isPinned }: { tag: TagHierarchyNode; isPinned?: boolean }) => (
@@ -377,115 +337,57 @@ export function TagHierarchyBrowser({
   }
 
   return (
-    <>
-      <View
-        className="bg-white rounded-xl shadow-sm border border-gray-200"
-        style={{ height: maxHeight }}
-      >
-        {/* Header */}
-        <View className="border-b border-gray-200">
-          {/* Back navigation */}
-          {breadcrumbs.length > 0 && (
-            <View className="p-4 border-b border-gray-100">
-              <Pressable
-                onPress={handleBackPress}
-                style={({ pressed }) => [
-                  {
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-                className="flex-row items-center"
-              >
-                <ChevronLeft size={16} color="#6B7280" />
-                <Text className="text-sm text-gray-600 ml-1">
-                  Back to {breadcrumbs[breadcrumbs.length - 1]?.name}
-                </Text>
-              </Pressable>
-            </View>
-          )}
+    <View
+      className="bg-white rounded-xl shadow-sm border border-gray-200"
+      style={{ height: maxHeight }}
+    >
+      {/* Header */}
+      <View className="border-b border-gray-200">
+        {/* Back navigation */}
+        {breadcrumbs.length > 0 && (
+          <View className="p-4 border-b border-gray-100">
+            <Pressable
+              onPress={handleBackPress}
+              style={({ pressed }) => [
+                {
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+              className="flex-row items-center"
+            >
+              <ChevronLeft size={16} color="#6B7280" />
+              <Text className="text-sm text-gray-600 ml-1">
+                Back to {breadcrumbs[breadcrumbs.length - 1]?.name}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
-          {/* Title */}
-          {!showPinnedFirst && (
-            <View className="p-4">
-              <Text className="text-2xl font-bold text-gray-900">
+        {/* Title */}
+        {!showPinnedFirst && (
+          <View className="p-4">
+            <Text className="text-2xl font-bold text-gray-900">
+              {currentTag?.name}
+            </Text>
+            {breadcrumbs.length > 0 && (
+              <Text className="text-sm text-gray-500 mt-1">
+                {breadcrumbs.map((crumb) => crumb.name).join(" > ")} &gt;{" "}
                 {currentTag?.name}
               </Text>
-              {breadcrumbs.length > 0 && (
-                <Text className="text-sm text-gray-500 mt-1">
-                  {breadcrumbs.map((crumb) => crumb.name).join(" > ")} &gt;{" "}
-                  {currentTag?.name}
-                </Text>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* Content */}
-        <FlashList
-          data={sections}
-          renderItem={renderSection}
-          keyExtractor={(item) => item.tag.id}
-          estimatedItemSize={200}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingVertical: 16 }}
-        />
+            )}
+          </View>
+        )}
       </View>
 
-      {/* Bottom Sheet for Pin/Unpin */}
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={-1}
-        snapPoints={snapPoints}
-        enablePanDownToClose={true}
-        backgroundStyle={{ backgroundColor: "#ffffff" }}
-        handleIndicatorStyle={{ backgroundColor: "#D1D5DB" }}
-      >
-        <BottomSheetView className="flex-1 px-6 pb-6">
-          {selectedTag && (
-            <>
-              <Text className="text-lg font-semibold text-gray-900 mb-4">
-                {selectedTag.name}
-              </Text>
-
-              <Pressable
-                onPress={handleTogglePin}
-                disabled={togglePinMutation.isPending}
-                style={({ pressed }) => [
-                  {
-                    backgroundColor: pressed ? "#F3F4F6" : "#F9FAFB",
-                    opacity: togglePinMutation.isPending ? 0.6 : 1,
-                  },
-                ]}
-                className="flex-row items-center p-4 rounded-lg"
-              >
-                {selectedTag.isPinned ? (
-                  <>
-                    <PinOff size={20} color="#6B7280" />
-                    <Text className="text-gray-900 font-medium ml-3">
-                      Unpin from Quick Access
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Pin size={20} color="#6B7280" />
-                    <Text className="text-gray-900 font-medium ml-3">
-                      Pin to Quick Access
-                    </Text>
-                  </>
-                )}
-
-                {togglePinMutation.isPending && (
-                  <ActivityIndicator
-                    size="small"
-                    color="#6B7280"
-                    style={{ marginLeft: "auto" }}
-                  />
-                )}
-              </Pressable>
-            </>
-          )}
-        </BottomSheetView>
-      </BottomSheet>
-    </>
+      {/* Content */}
+      <FlashList
+        data={sections}
+        renderItem={renderSection}
+        keyExtractor={(item) => item.tag.id}
+        estimatedItemSize={200}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: 16 }}
+      />
+    </View>
   );
 }
