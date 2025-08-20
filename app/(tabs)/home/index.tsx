@@ -8,7 +8,7 @@ import { CardActivityStats } from "../../../components/dashboard/CardActivitySta
 import { CardStatusPieChart } from "../../../components/dashboard/CardStatusPieChart";
 import { DashboardError } from "../../../components/dashboard/DashboardError";
 import { DashboardLoading } from "../../../components/dashboard/DashboardLoading";
-import StackedHorizontalBarChart from "../../../components/dashboard/StackedHorizontalBarChart";
+import { TagHierarchyBrowser } from "../../../components/dashboard/TagHierarchyBrowser";
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
 export default function HomeScreen() {
@@ -84,7 +84,7 @@ export default function HomeScreen() {
               {/* Card Activity Stats */}
               <View className="gap-4">
                 <CardActivityStats stats={dashboardData.cardActivity} />
-                <StackedHorizontalBarChart />
+                <TagHierarchyBrowser maxHeight={400} />
                 <CardStatusPieChart
                   data={dashboardData.cardDistribution}
                   totalCards={dashboardData.totalCards}
