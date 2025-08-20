@@ -143,7 +143,6 @@ export default function BodyEditor({
   // FIXED: Only initialize editor content once when page loads
   useEffect(() => {
     if (page?.content && !hasInitialized.current) {
-      console.log("Initializing editor with page content:", page.content);
       editor.setContent(page.content);
       setContent(page.content);
       lastSavedContent.current = page.content;
