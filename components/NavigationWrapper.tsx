@@ -1,25 +1,29 @@
-// components/NavigationWrapper.tsx - Updated with modern Gesture API
+// components/NavigationWrapper.tsx - Updated with Search functionality
 import { usePathname, useRouter } from "expo-router";
 import {
   Bell,
+  ChartNetwork,
   ChevronRight,
-  Copy,
-  FileText,
   Folder,
   Home,
   Inbox,
   Layers,
+  LibraryBig,
   Map,
   Menu,
+  Search,
   StickyNote,
+  Tag,
+  X,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Modal,
   Pressable,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -39,6 +43,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { pageRepository } from "../db/pageRepository";
+import { getSearchConfig, isSearchableRoute } from "../lib/searchRoutes";
+import { useSearchStore } from "../store/searchStore";
 import { PinnedSection } from "./pinned/PinnedSection";
 import { ProfileHeader } from "./ProfileHeader";
 
@@ -59,6 +65,18 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Search functionality
+  const {
+    query,
+    isSearching,
+    setQuery,
+    clearSearch,
+    setSearchContext,
+    shouldShowSearch,
+    searchUIVisible,
+    setSearchUIVisible,
+  } = useSearchStore();
+
   // Animation values for workspace collapsible
   const workspaceHeight = useSharedValue(0);
   const workspaceRotation = useSharedValue(0);
@@ -66,6 +84,12 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   // Animation values for swipe gesture
   const translateX = useSharedValue(0);
   const backdropOpacity = useSharedValue(1);
+
+  // Update search context when route changes
+  useEffect(() => {
+    const searchConfig = getSearchConfig(pathname);
+    setSearchContext(searchConfig?.context || null);
+  }, [pathname, setSearchContext]);
 
   const openSidebar = () => {
     setSidebarVisible(true);
@@ -97,7 +121,6 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const handleSettingsPress = () => {
     closeSidebar();
     router.push("/(tabs)/settings" as any);
-    // Or navigate to your settings screen
   };
 
   // Create new page/canvas function
@@ -170,17 +193,24 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       isCreateButton: false,
     },
     {
-      id: "documents",
-      title: "Documents",
-      icon: FileText,
-      route: "/(tabs)/workspace/documents",
+      id: "tags",
+      title: "Tags",
+      icon: Tag,
+      route: "/(tabs)/workspace/global-tags",
       isCreateButton: false,
     },
     {
-      id: "templates",
-      title: "Templates",
-      icon: Copy,
-      route: "/(tabs)/workspace/templates",
+      id: "resources",
+      title: "Resources",
+      icon: LibraryBig,
+      route: "/(tabs)/workspace/resources",
+      isCreateButton: false,
+    },
+    {
+      id: "graph",
+      title: "Graph",
+      icon: ChartNetwork,
+      route: "/(tabs)/workspace/graph",
       isCreateButton: false,
     },
   ];
@@ -195,7 +225,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     setWorkspaceExpanded(newExpanded);
 
     // Calculate height for 5 items (each ~56px tall)
-    const targetHeight = newExpanded ? 240 : 0; // Changed from 168 to 280
+    const targetHeight = newExpanded ? 290 : 0;
 
     workspaceHeight.value = withTiming(targetHeight, {
       duration: 300,
@@ -264,38 +294,128 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     };
   });
 
+  // Handle entering search mode
+  const enterSearchMode = () => {
+    setSearchUIVisible(true);
+  };
+
+  // Handle exiting search mode
+  const exitSearchMode = () => {
+    setSearchUIVisible(false); // This will also clear the search
+  };
+
+  // Get search configuration for current route
+  const searchConfig = getSearchConfig(pathname);
+  const showSearchButton = shouldShowSearch() && isSearchableRoute(pathname);
+
+  // Get page title for header
+  const getPageTitle = () => {
+    switch (pathname) {
+      case "/workspace/pages":
+        return "All Pages";
+      case "/home":
+        return "Home";
+      case "/review":
+        return "Review";
+      case "/notifications":
+        return "Notifications";
+      case "/profile":
+        return "Profile";
+      case "/workspace/resources":
+        return "Resources";
+      case "/workspace/graph":
+        return "Graph";
+      default:
+        return pathname.replace("/", "").replace(/-/g, " ");
+    }
+  };
+
   return (
     <View className="flex-1 bg-background">
       {/* Header Bar */}
       <View
-        className="bg-white border-b border-border flex-row items-center justify-between px-4"
+        className="bg-white border-b border-border"
         style={{
           paddingTop: insets.top + 8,
           paddingBottom: 12,
         }}
       >
-        {/* Hamburger Menu Button */}
-        <TouchableOpacity
-          onPress={openSidebar}
-          className="p-2 -ml-2"
-          activeOpacity={0.7}
-        >
-          <Menu size={24} color="#18181b" />
-        </TouchableOpacity>
+        {searchUIVisible && searchConfig ? (
+          /* Search Mode Header */
+          <View className="flex-row items-center px-4">
+            {/* Close Search Button */}
+            <TouchableOpacity
+              onPress={exitSearchMode}
+              className="p-2 -ml-2"
+              activeOpacity={0.7}
+            >
+              <X size={24} color="#18181b" />
+            </TouchableOpacity>
 
-        {/* App Title/Logo Area */}
-        {pathname === "/workspace/pages" ? (
-          <Text className="text-foreground text-lg font-semibold">
-            All Pages
-          </Text>
+            {/* Search Input */}
+            <View className="flex-1 flex-row items-center bg-gray-100 rounded-lg px-3 py-2 mx-3">
+              <Search size={20} color="#9ca3af" />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={searchConfig.placeholder}
+                placeholderTextColor="#9ca3af"
+                className="flex-1 ml-2 text-gray-900 text-base"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                maxLength={100}
+                autoFocus={true} // Auto focus when entering search mode
+              />
+              {query.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setQuery("")}
+                  className="ml-2 p-1"
+                  activeOpacity={0.7}
+                >
+                  <X size={18} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+              {isSearching && (
+                <ActivityIndicator
+                  size="small"
+                  color="#3b82f6"
+                  style={{ marginLeft: 8 }}
+                />
+              )}
+            </View>
+          </View>
         ) : (
-          <Text className="text-foreground text-lg font-semibold">
-            {pathname.replace("/", "").replace(/-/g, " ")}
-          </Text>
-        )}
+          /* Normal Header */
+          <View className="flex-row items-center justify-between px-4">
+            {/* Hamburger Menu Button */}
+            <TouchableOpacity
+              onPress={openSidebar}
+              className="p-2 -ml-2"
+              activeOpacity={0.7}
+            >
+              <Menu size={24} color="#18181b" />
+            </TouchableOpacity>
 
-        {/* Right side placeholder for future actions */}
-        <View className="w-10" />
+            {/* App Title */}
+            <Text className="text-foreground text-lg font-semibold">
+              {getPageTitle()}
+            </Text>
+
+            {/* Right Side - Search Button or Placeholder */}
+            {showSearchButton ? (
+              <TouchableOpacity
+                onPress={enterSearchMode}
+                className="p-2 -mr-2"
+                activeOpacity={0.7}
+              >
+                <Search size={24} color="#18181b" />
+              </TouchableOpacity>
+            ) : (
+              <View className="w-10" />
+            )}
+          </View>
+        )}
       </View>
 
       {/* Main Content Area */}
@@ -334,7 +454,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                     <ProfileHeader onSettingsPress={handleSettingsPress} />
                   </View>
 
-                  {/* Navigation Items - Reordered */}
+                  {/* Navigation Items */}
                   <View className="flex-1 py-4">
                     {/* 1. Home */}
                     <TouchableOpacity
@@ -450,7 +570,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* 5. Updated Pinned Section with Drag & Drop */}
+                    {/* 5. Pinned Section */}
                     <PinnedSection onItemPress={closeSidebar} />
                   </View>
                 </Animated.View>
