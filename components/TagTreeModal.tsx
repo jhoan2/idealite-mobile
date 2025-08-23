@@ -1,4 +1,4 @@
-// components/TagTreeModal.tsx - Simplified component with only tags
+// components/TagTreeModal.tsx - Modified to slide from right side
 import { Ionicons } from "@expo/vector-icons";
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -58,8 +58,8 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
   // Add the create tag mutation
   const createTagMutation = useCreateTag();
 
-  // Animation refs
-  const slideAnim = useRef(new Animated.Value(-MODAL_WIDTH)).current;
+  // Animation refs - CHANGED: Start from positive value for right side
+  const slideAnim = useRef(new Animated.Value(MODAL_WIDTH)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   // BottomSheet setup
@@ -176,7 +176,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
     }
   };
 
-  // Handle modal animations
+  // Handle modal animations - CHANGED: Updated for right side slide
   useEffect(() => {
     if (visible) {
       Animated.parallel([
@@ -199,7 +199,7 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
       Animated.parallel([
         Animated.timing(slideAnim, {
-          toValue: -MODAL_WIDTH,
+          toValue: MODAL_WIDTH, // CHANGED: Positive value to slide right off-screen
           duration: 250,
           useNativeDriver: true,
         }),
@@ -421,23 +421,23 @@ export function TagTreeModal({ visible, onClose }: TagTreeModalProps) {
 
   return (
     <>
-      {/* Drawer */}
+      {/* Drawer - CHANGED: Modified to slide from right side */}
       <Animated.View
         style={{
           position: "absolute",
-          left: 0,
+          right: 0, // CHANGED: from left: 0 to right: 0
           top: 0,
           bottom: 0,
           width: MODAL_WIDTH,
           backgroundColor: "#FFFFFF",
-          borderRightWidth: 1,
+          borderLeftWidth: 1, // CHANGED: from borderRightWidth to borderLeftWidth
           borderColor: "#D1D5DB",
           paddingTop: top,
           paddingBottom: bottom,
           transform: [{ translateX: slideAnim }],
           shadowColor: "#000",
           shadowOffset: {
-            width: 2,
+            width: -2, // CHANGED: from width: 2 to width: -2 (shadow on left side now)
             height: 0,
           },
           shadowOpacity: 0.25,
