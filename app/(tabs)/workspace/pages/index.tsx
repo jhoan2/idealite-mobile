@@ -1,7 +1,7 @@
-// app/(tabs)/workspace/pages/index.tsx - Updated with search functionality
+// app/(tabs)/workspace/pages/index.tsx - Updated without floating button
 import { FlashList } from "@shopify/flash-list";
 import { router } from "expo-router";
-import { FileText, Plus, Search, Wifi, WifiOff, X } from "lucide-react-native";
+import { FileText, Search, Wifi, WifiOff, X } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -168,33 +168,6 @@ export default function AllPagesScreen() {
     }
   }, [isOnline, performFullSync, loadInitialPages, isSearchMode, searchQuery]);
 
-  // Create new page
-  const createNewPage = async () => {
-    try {
-      const newPage = await pageRepository.createPageWithUniqueTitle(
-        "Untitled Page",
-        {
-          content: "<p>Start writing...</p>",
-          content_type: "page",
-          description: null,
-          image_previews: null,
-          deleted: false,
-        }
-      );
-
-      router.push({
-        pathname: "/workspace/pages/[id]",
-        params: { id: newPage.id.toString() },
-      });
-
-      // Refresh to show the new page at the top
-      await loadInitialPages();
-    } catch (error) {
-      console.error("Error creating page:", error);
-      Alert.alert("Error", "Failed to create page");
-    }
-  };
-
   const openPage = (page: Page) => {
     router.push({
       pathname: "/workspace/pages/[id]",
@@ -250,7 +223,8 @@ export default function AllPagesScreen() {
           No pages yet
         </Text>
         <Text className="text-gray-500 text-center mb-8">
-          Create your first page to get started with Idealite
+          Use the sidebar menu to create your first page or memory map to get
+          started with Idealite
         </Text>
       </View>
     );
@@ -378,7 +352,7 @@ export default function AllPagesScreen() {
         estimatedItemSize={120}
         contentContainerStyle={{
           paddingTop: 16,
-          paddingBottom: insets.bottom + 100,
+          paddingBottom: insets.bottom + 16, // Removed extra padding for FAB
         }}
         refreshControl={
           <RefreshControl
@@ -396,22 +370,6 @@ export default function AllPagesScreen() {
         onEndReached={showLoadMore ? loadMorePages : undefined}
         onEndReachedThreshold={showLoadMore ? 0.1 : undefined}
       />
-
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        onPress={createNewPage}
-        className="absolute bottom-6 right-6 bg-blue-600 w-14 h-14 rounded-full items-center justify-center shadow-lg"
-        style={{
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4,
-          elevation: 5,
-        }}
-        activeOpacity={0.8}
-      >
-        <Plus size={24} color="white" />
-      </TouchableOpacity>
     </View>
   );
 }
