@@ -1,4 +1,4 @@
-// components/NavigationWrapper.tsx
+// components/NavigationWrapper.tsx - Updated with modern Gesture API
 import { usePathname, useRouter } from "expo-router";
 import {
   Bell,
@@ -20,8 +20,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import ReanimatedAnimated, {
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import Animated, {
   Extrapolation,
   interpolate,
   runOnJS,
@@ -31,7 +35,7 @@ import ReanimatedAnimated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { PinnedSection } from "./PinnedSection";
+import { PinnedSection } from "./pinned/PinnedSection";
 import { ProfileHeader } from "./ProfileHeader";
 
 interface NavigationWrapperProps {
@@ -132,7 +136,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     });
   };
 
-  // Pan gesture for swipe to close
+  // Modern Pan gesture for swipe to close
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
       // Only allow swiping left (negative translation)
@@ -234,120 +238,122 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
         animationType="fade"
         onRequestClose={closeSidebar}
       >
-        {/* Animated Backdrop */}
-        <ReanimatedAnimated.View
-          style={[
-            { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.5)" },
-            backdropAnimatedStyle,
-          ]}
-        >
-          <Pressable className="flex-1" onPress={closeSidebar}>
-            {/* Gesture Detector wraps the sidebar */}
-            <GestureDetector gesture={panGesture}>
-              <ReanimatedAnimated.View
-                className="absolute left-0 top-0 bottom-0 bg-white shadow-2xl"
-                style={[
-                  {
-                    width: SIDEBAR_WIDTH,
-                    paddingTop: insets.top,
-                  },
-                  sidebarAnimatedStyle,
-                ]}
-              >
-                {/* Sidebar Header with ProfileHeader Component */}
-                <View className="border-b border-border">
-                  <ProfileHeader onSettingsPress={handleSettingsPress} />
-                </View>
-
-                {/* Navigation Items - Reordered */}
-                <View className="flex-1 py-4">
-                  {/* 1. Home */}
-                  <TouchableOpacity
-                    onPress={() => handleNavigate("/(tabs)/home")}
-                    className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                    activeOpacity={0.7}
-                  >
-                    <Home size={24} color="#71717a" />
-                    <Text className="text-foreground text-base font-medium ml-4">
-                      Home
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* 2. Collapsible Workspace Section */}
-                  <View>
-                    {/* Workspace Main Button */}
-                    <TouchableOpacity
-                      onPress={toggleWorkspace}
-                      className="flex-row items-center justify-between px-6 py-4 active:bg-gray-100"
-                      activeOpacity={0.7}
-                    >
-                      <View className="flex-row items-center">
-                        <Folder size={24} color="#71717a" />
-                        <Text className="text-foreground text-base font-medium ml-4">
-                          Workspace
-                        </Text>
-                      </View>
-
-                      <ReanimatedAnimated.View style={workspaceIconStyle}>
-                        <ChevronRight size={20} color="#71717a" />
-                      </ReanimatedAnimated.View>
-                    </TouchableOpacity>
-
-                    {/* Collapsible Sub-items */}
-                    <ReanimatedAnimated.View
-                      style={[workspaceAnimatedStyle, { overflow: "hidden" }]}
-                    >
-                      {workspaceItems.map((item) => {
-                        const IconComponent = item.icon;
-                        return (
-                          <TouchableOpacity
-                            key={item.id}
-                            onPress={() => handleNavigate(item.route)}
-                            className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                            activeOpacity={0.7}
-                            style={{ paddingLeft: 48 }} // Extra indent for sub-items
-                          >
-                            <IconComponent size={20} color="#9ca3af" />
-                            <Text className="text-muted-foreground text-sm font-medium ml-3">
-                              {item.title}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ReanimatedAnimated.View>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          {/* Animated Backdrop */}
+          <Animated.View
+            style={[
+              { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.5)" },
+              backdropAnimatedStyle,
+            ]}
+          >
+            <Pressable className="flex-1" onPress={closeSidebar}>
+              {/* Gesture Detector wraps the sidebar */}
+              <GestureDetector gesture={panGesture}>
+                <Animated.View
+                  className="absolute left-0 top-0 bottom-0 bg-white shadow-2xl"
+                  style={[
+                    {
+                      width: SIDEBAR_WIDTH,
+                      paddingTop: insets.top,
+                    },
+                    sidebarAnimatedStyle,
+                  ]}
+                >
+                  {/* Sidebar Header with ProfileHeader Component */}
+                  <View className="border-b border-border">
+                    <ProfileHeader onSettingsPress={handleSettingsPress} />
                   </View>
 
-                  {/* 3. Review */}
-                  <TouchableOpacity
-                    onPress={() => handleNavigate("/(tabs)/review")}
-                    className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                    activeOpacity={0.7}
-                  >
-                    <Inbox size={24} color="#71717a" />
-                    <Text className="text-foreground text-base font-medium ml-4">
-                      Review
-                    </Text>
-                  </TouchableOpacity>
+                  {/* Navigation Items - Reordered */}
+                  <View className="flex-1 py-4">
+                    {/* 1. Home */}
+                    <TouchableOpacity
+                      onPress={() => handleNavigate("/(tabs)/home")}
+                      className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                      activeOpacity={0.7}
+                    >
+                      <Home size={24} color="#71717a" />
+                      <Text className="text-foreground text-base font-medium ml-4">
+                        Home
+                      </Text>
+                    </TouchableOpacity>
 
-                  {/* 4. Notifications */}
-                  <TouchableOpacity
-                    onPress={() => handleNavigate("/(tabs)/notifications")}
-                    className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                    activeOpacity={0.7}
-                  >
-                    <Bell size={24} color="#71717a" />
-                    <Text className="text-foreground text-base font-medium ml-4">
-                      Notifications
-                    </Text>
-                  </TouchableOpacity>
+                    {/* 2. Collapsible Workspace Section */}
+                    <View>
+                      {/* Workspace Main Button */}
+                      <TouchableOpacity
+                        onPress={toggleWorkspace}
+                        className="flex-row items-center justify-between px-6 py-4 active:bg-gray-100"
+                        activeOpacity={0.7}
+                      >
+                        <View className="flex-row items-center">
+                          <Folder size={24} color="#71717a" />
+                          <Text className="text-foreground text-base font-medium ml-4">
+                            Workspace
+                          </Text>
+                        </View>
 
-                  {/* 5. Pinned Section */}
-                  <PinnedSection onItemPress={closeSidebar} />
-                </View>
-              </ReanimatedAnimated.View>
-            </GestureDetector>
-          </Pressable>
-        </ReanimatedAnimated.View>
+                        <Animated.View style={workspaceIconStyle}>
+                          <ChevronRight size={20} color="#71717a" />
+                        </Animated.View>
+                      </TouchableOpacity>
+
+                      {/* Collapsible Sub-items */}
+                      <Animated.View
+                        style={[workspaceAnimatedStyle, { overflow: "hidden" }]}
+                      >
+                        {workspaceItems.map((item) => {
+                          const IconComponent = item.icon;
+                          return (
+                            <TouchableOpacity
+                              key={item.id}
+                              onPress={() => handleNavigate(item.route)}
+                              className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                              activeOpacity={0.7}
+                              style={{ paddingLeft: 48 }} // Extra indent for sub-items
+                            >
+                              <IconComponent size={20} color="#9ca3af" />
+                              <Text className="text-muted-foreground text-sm font-medium ml-3">
+                                {item.title}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </Animated.View>
+                    </View>
+
+                    {/* 3. Review */}
+                    <TouchableOpacity
+                      onPress={() => handleNavigate("/(tabs)/review")}
+                      className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                      activeOpacity={0.7}
+                    >
+                      <Inbox size={24} color="#71717a" />
+                      <Text className="text-foreground text-base font-medium ml-4">
+                        Review
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 4. Notifications */}
+                    <TouchableOpacity
+                      onPress={() => handleNavigate("/(tabs)/notifications")}
+                      className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                      activeOpacity={0.7}
+                    >
+                      <Bell size={24} color="#71717a" />
+                      <Text className="text-foreground text-base font-medium ml-4">
+                        Notifications
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 5. Updated Pinned Section with Drag & Drop */}
+                    <PinnedSection onItemPress={closeSidebar} />
+                  </View>
+                </Animated.View>
+              </GestureDetector>
+            </Pressable>
+          </Animated.View>
+        </GestureHandlerRootView>
       </Modal>
     </View>
   );
