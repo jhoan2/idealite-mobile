@@ -2,7 +2,7 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Text, View } from "react-native";
 import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
@@ -185,12 +185,9 @@ export function PinnedSection({ onItemPress }: PinnedSectionProps) {
   }
 
   return (
-    <ScrollView
+    <View
       className="py-2"
-      style={{ maxHeight: 200 }} // Limit height
-      showsVerticalScrollIndicator={false}
-      nestedScrollEnabled={true} // Explicitly enable for nested scrolling
-      scrollEventThrottle={16}
+      style={{ maxHeight: 300 }} // Keep the height limit
     >
       {/* Pinned Section Header */}
       <View className="px-6 py-2">
@@ -206,7 +203,8 @@ export function PinnedSection({ onItemPress }: PinnedSectionProps) {
         onDragEnd={handleDragEnd}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        scrollEnabled={false} // Disable scrolling since it's inside another scrollable
+        scrollEnabled={true} // Enable scrolling
+        showsVerticalScrollIndicator={true} // Show scroll indicator
         containerStyle={{
           flex: 0, // Don't take up all available space
         }}
@@ -222,6 +220,6 @@ export function PinnedSection({ onItemPress }: PinnedSectionProps) {
           <Text className="text-blue-500 text-xs ml-2">Saving order...</Text>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
