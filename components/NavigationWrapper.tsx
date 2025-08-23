@@ -1,4 +1,4 @@
-// components/NavigationWrapper.tsx - Updated with Search functionality
+// components/NavigationWrapper.tsx - Updated with Tag Tree Button
 import { usePathname, useRouter } from "expo-router";
 import {
   Bell,
@@ -47,6 +47,7 @@ import { getSearchConfig, isSearchableRoute } from "../lib/searchRoutes";
 import { useSearchStore } from "../store/searchStore";
 import { PinnedSection } from "./pinned/PinnedSection";
 import { ProfileHeader } from "./ProfileHeader";
+import { TagTreeModal } from "./TagTreeModal";
 
 interface NavigationWrapperProps {
   children: React.ReactNode;
@@ -61,6 +62,10 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
   }>({});
+
+  // Add TagTreeModal state
+  const [showTagTreeModal, setShowTagTreeModal] = useState(false);
+
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
@@ -168,6 +173,9 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       setLoadingStates((prev) => ({ ...prev, [loadingKey]: false }));
     }
   };
+
+  // Check if we're on the global-tags route
+  const isGlobalTagsRoute = pathname === "/workspace/global-tags";
 
   // Workspace items including create buttons
   const workspaceItems = [
@@ -313,6 +321,8 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     switch (pathname) {
       case "/workspace/pages":
         return "All Pages";
+      case "/workspace/global-tags":
+        return "Global Tags";
       case "/home":
         return "Home";
       case "/review":
@@ -327,6 +337,36 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
         return "Graph";
       default:
         return pathname.replace("/", "").replace(/-/g, " ");
+    }
+  };
+
+  // Determine what to show on the right side of header
+  const getRightHeaderContent = () => {
+    if (isGlobalTagsRoute) {
+      // Show tag tree button on global-tags route
+      return (
+        <TouchableOpacity
+          onPress={() => setShowTagTreeModal(true)}
+          className="p-2 -mr-2"
+          activeOpacity={0.7}
+        >
+          <Tag size={24} color="#18181b" />
+        </TouchableOpacity>
+      );
+    } else if (showSearchButton) {
+      // Show search button on searchable routes
+      return (
+        <TouchableOpacity
+          onPress={enterSearchMode}
+          className="p-2 -mr-2"
+          activeOpacity={0.7}
+        >
+          <Search size={24} color="#18181b" />
+        </TouchableOpacity>
+      );
+    } else {
+      // Show placeholder spacer
+      return <View className="w-10" />;
     }
   };
 
@@ -402,18 +442,8 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
               {getPageTitle()}
             </Text>
 
-            {/* Right Side - Search Button or Placeholder */}
-            {showSearchButton ? (
-              <TouchableOpacity
-                onPress={enterSearchMode}
-                className="p-2 -mr-2"
-                activeOpacity={0.7}
-              >
-                <Search size={24} color="#18181b" />
-              </TouchableOpacity>
-            ) : (
-              <View className="w-10" />
-            )}
+            {/* Right Side - Context-specific button */}
+            {getRightHeaderContent()}
           </View>
         )}
       </View>
@@ -579,6 +609,12 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
           </Animated.View>
         </GestureHandlerRootView>
       </Modal>
+
+      {/* Tag Tree Modal - only render when needed */}
+      <TagTreeModal
+        visible={showTagTreeModal}
+        onClose={() => setShowTagTreeModal(false)}
+      />
     </View>
   );
 }
