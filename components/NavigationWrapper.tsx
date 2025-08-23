@@ -9,10 +9,13 @@ import {
   Home,
   Inbox,
   Layers,
+  Map,
   Menu,
+  StickyNote,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Modal,
   Pressable,
@@ -35,6 +38,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { pageRepository } from "../db/pageRepository";
 import { PinnedSection } from "./pinned/PinnedSection";
 import { ProfileHeader } from "./ProfileHeader";
 
@@ -48,6 +52,9 @@ const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75; // 75% of screen width
 export function NavigationWrapper({ children }: NavigationWrapperProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
+  const [loadingStates, setLoadingStates] = useState<{
+    [key: string]: boolean;
+  }>({});
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
@@ -93,25 +100,88 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     // Or navigate to your settings screen
   };
 
-  // Workspace sub-items
+  // Create new page/canvas function
+  const handleCreateAction = async (type: "page" | "canvas") => {
+    const loadingKey = `create-${type}`;
+
+    try {
+      setLoadingStates((prev) => ({ ...prev, [loadingKey]: true }));
+
+      const contentType = type === "page" ? "page" : "canvas";
+      const defaultTitle =
+        type === "page" ? "Untitled Page" : "Untitled Memory Map";
+      const defaultContent = type === "page" ? "<p>Start writing...</p>" : "";
+
+      const newPage = await pageRepository.createPageWithUniqueTitle(
+        defaultTitle,
+        {
+          content: defaultContent,
+          content_type: contentType,
+          description: null,
+          image_previews: null,
+          canvas_image_cid: null,
+          deleted: false,
+        }
+      );
+
+      // Close sidebar first
+      closeSidebar();
+
+      // Navigate to appropriate editor
+      if (type === "canvas") {
+        router.push({
+          pathname: "/(tabs)/workspace/canvas/[id]",
+          params: { id: newPage.id.toString() },
+        });
+      } else {
+        router.push({
+          pathname: "/(tabs)/workspace/pages/[id]",
+          params: { id: newPage.id.toString() },
+        });
+      }
+    } catch (error) {
+      console.error(`Error creating ${type}:`, error);
+    } finally {
+      setLoadingStates((prev) => ({ ...prev, [loadingKey]: false }));
+    }
+  };
+
+  // Workspace items including create buttons
   const workspaceItems = [
+    {
+      id: "create-page",
+      title: "Create Page",
+      icon: StickyNote,
+      isCreateButton: true,
+      createType: "page" as const,
+    },
+    {
+      id: "create-canvas",
+      title: "Create Memory Map",
+      icon: Map,
+      isCreateButton: true,
+      createType: "canvas" as const,
+    },
     {
       id: "all-pages",
       title: "All Pages",
       icon: Layers,
       route: "/(tabs)/workspace/pages",
+      isCreateButton: false,
     },
     {
       id: "documents",
       title: "Documents",
       icon: FileText,
       route: "/(tabs)/workspace/documents",
+      isCreateButton: false,
     },
     {
       id: "templates",
       title: "Templates",
       icon: Copy,
       route: "/(tabs)/workspace/templates",
+      isCreateButton: false,
     },
   ];
 
@@ -124,8 +194,8 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
     const newExpanded = !workspaceExpanded;
     setWorkspaceExpanded(newExpanded);
 
-    // Calculate height for 3 items (each ~56px tall)
-    const targetHeight = newExpanded ? 168 : 0;
+    // Calculate height for 5 items (each ~56px tall)
+    const targetHeight = newExpanded ? 240 : 0; // Changed from 168 to 280
 
     workspaceHeight.value = withTiming(targetHeight, {
       duration: 300,
@@ -169,7 +239,7 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       height: workspaceHeight.value,
       opacity: interpolate(
         workspaceHeight.value,
-        [0, 84, 168],
+        [0, 140, 280],
         [0, 0.5, 1],
         Extrapolation.CLAMP
       ),
@@ -304,20 +374,54 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
                       >
                         {workspaceItems.map((item) => {
                           const IconComponent = item.icon;
-                          return (
-                            <TouchableOpacity
-                              key={item.id}
-                              onPress={() => handleNavigate(item.route)}
-                              className="flex-row items-center px-6 py-4 active:bg-gray-100"
-                              activeOpacity={0.7}
-                              style={{ paddingLeft: 48 }} // Extra indent for sub-items
-                            >
-                              <IconComponent size={20} color="#9ca3af" />
-                              <Text className="text-muted-foreground text-sm font-medium ml-3">
-                                {item.title}
-                              </Text>
-                            </TouchableOpacity>
-                          );
+                          const isLoading =
+                            loadingStates[`create-${item.createType}`];
+
+                          if (item.isCreateButton) {
+                            return (
+                              <TouchableOpacity
+                                key={item.id}
+                                onPress={() =>
+                                  item.createType &&
+                                  handleCreateAction(item.createType)
+                                }
+                                disabled={isLoading}
+                                className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                                activeOpacity={0.7}
+                                style={{
+                                  paddingLeft: 48,
+                                  opacity: isLoading ? 0.6 : 1,
+                                }}
+                              >
+                                {isLoading ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#9ca3af"
+                                  />
+                                ) : (
+                                  <IconComponent size={20} color="#9ca3af" />
+                                )}
+                                <Text className="text-muted-foreground text-sm font-medium ml-3">
+                                  {item.title}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          } else {
+                            return (
+                              <TouchableOpacity
+                                key={item.id}
+                                onPress={() => handleNavigate(item.route!)}
+                                className="flex-row items-center px-6 py-4 active:bg-gray-100"
+                                activeOpacity={0.7}
+                                style={{ paddingLeft: 48 }}
+                              >
+                                <IconComponent size={20} color="#9ca3af" />
+                                <Text className="text-muted-foreground text-sm font-medium ml-3">
+                                  {item.title}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          }
                         })}
                       </Animated.View>
                     </View>
