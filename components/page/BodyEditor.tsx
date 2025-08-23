@@ -83,7 +83,6 @@ export default function BodyEditor({
     onChange: async () => {
       try {
         const html = await editor.getHTML();
-        console.log("Editor content changed:", html);
         setContent(html);
         setHasUnsavedChanges(true);
       } catch (err) {
