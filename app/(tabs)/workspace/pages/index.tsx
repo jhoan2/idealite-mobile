@@ -1,7 +1,7 @@
 // app/(tabs)/workspace/pages/index.tsx - Updated with Search Store Integration
 import { FlashList } from "@shopify/flash-list";
 import { router, usePathname } from "expo-router";
-import { FileText, Wifi, WifiOff } from "lucide-react-native";
+import { FileText, WifiOff } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -286,54 +286,50 @@ export default function AllPagesScreen() {
   return (
     <View className="flex-1 bg-gray-50">
       {/* Status Bar */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center">
-            {isOnline ? (
-              <Wifi size={16} color="#10b981" />
-            ) : (
+      {!isOnline && (
+        <View className="bg-white border-b border-gray-200 px-4 py-3">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center">
               <WifiOff size={16} color="#ef4444" />
-            )}
-            <Text
-              className={`ml-2 text-sm font-medium ${
-                isOnline ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {isOnline ? "Online" : "Offline"}
-            </Text>
-
-            {syncStatus === "syncing" && (
-              <View className="flex-row items-center ml-4">
-                <ActivityIndicator size="small" color="#f59e0b" />
-                <Text className="text-orange-600 text-sm ml-2">Syncing...</Text>
-              </View>
-            )}
-
-            {lastSyncTimestamp && (
-              <Text className="text-gray-400 text-xs ml-4">
-                Last sync: {new Date(lastSyncTimestamp).toLocaleTimeString()}
+              <Text className="ml-2 text-sm font-medium text-red-600">
+                Offline
               </Text>
-            )}
-          </View>
 
-          <View className="flex-row items-center">
-            {isSearchMode && (
-              <Text className="text-blue-600 text-sm mr-4">
-                {searchResults.length} result
-                {searchResults.length !== 1 ? "s" : ""}
-              </Text>
-            )}
+              {syncStatus === "syncing" && (
+                <View className="flex-row items-center ml-4">
+                  <ActivityIndicator size="small" color="#f59e0b" />
+                  <Text className="text-orange-600 text-sm ml-2">
+                    Syncing...
+                  </Text>
+                </View>
+              )}
 
-            {queueLength > 0 && (
-              <View className="bg-blue-100 px-2 py-1 rounded-full">
-                <Text className="text-blue-600 text-xs font-medium">
-                  {queueLength} pending
+              {lastSyncTimestamp && (
+                <Text className="text-gray-400 text-xs ml-4">
+                  Last sync: {new Date(lastSyncTimestamp).toLocaleTimeString()}
                 </Text>
-              </View>
-            )}
+              )}
+            </View>
+
+            <View className="flex-row items-center">
+              {isSearchMode && (
+                <Text className="text-blue-600 text-sm mr-4">
+                  {searchResults.length} result
+                  {searchResults.length !== 1 ? "s" : ""}
+                </Text>
+              )}
+
+              {queueLength > 0 && (
+                <View className="bg-blue-100 px-2 py-1 rounded-full">
+                  <Text className="text-blue-600 text-xs font-medium">
+                    {queueLength} pending
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
       {/* Pages List */}
       <FlashList
