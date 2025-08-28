@@ -2,7 +2,6 @@
 import { usePathname, useRouter } from "expo-router";
 import {
   Bell,
-  ChartNetwork,
   ChevronRight,
   Folder,
   Home,
@@ -214,13 +213,13 @@ export function NavigationWrapper({ children }: NavigationWrapperProps) {
       route: "/(tabs)/workspace/resources",
       isCreateButton: false,
     },
-    {
-      id: "graph",
-      title: "Graph",
-      icon: ChartNetwork,
-      route: "/(tabs)/workspace/graph",
-      isCreateButton: false,
-    },
+    // {
+    //   id: "graph",
+    //   title: "Graph",
+    //   icon: ChartNetwork,
+    //   route: "/(tabs)/workspace/graph",
+    //   isCreateButton: false,
+    // },
   ];
 
   const handleNavigate = (route: string) => {
